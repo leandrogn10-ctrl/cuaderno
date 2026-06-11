@@ -276,6 +276,56 @@ body[data-view="workout"] .content { padding: 0; }
 /* thumbnails */
 .thumb { width: 44px; height: 44px; object-fit: cover; border: 1px solid var(--line); flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, var(--paper)) 0%, var(--paper) 70%); font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: 22px; color: var(--accent); text-transform: uppercase; }
 .thumb.sm { width: 34px; height: 34px; font-size: 17px; }
+.thumb img, img.thumb { background: #fff; }
+
+/* ── runner screens ── */
+.media-panel .flipimg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #fff; }
+.brief-row { display: flex; align-items: center; gap: 12px; background: var(--paper); border: 1px solid var(--line); padding: 10px 12px; margin-bottom: 8px; animation: rise 0.4s both; }
+.brief-row .bi { flex: 1; min-width: 0; }
+.brief-row .bi .n { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; text-transform: uppercase; font-size: 19px; letter-spacing: 0.03em; line-height: 1; display: block; }
+.brief-row .bi .t { font-size: 10px; color: var(--ink-faint); letter-spacing: 0.08em; }
+.brief-title { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; text-transform: uppercase; font-size: 38px; line-height: 0.9; margin: 8px 0 2px; }
+.brief-sub { font-size: 10px; color: var(--ink-faint); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 14px; }
+
+.count-wrap { text-align: center; padding-top: 16vh; }
+.count-num { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: min(44vh, 70vw); line-height: 0.85; color: var(--accent); animation: countpop 0.5s; text-shadow: 0 0 60px color-mix(in srgb, var(--accent) 35%, transparent); }
+@keyframes countpop { from { transform: scale(1.25); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.count-sub { font-size: 11px; letter-spacing: 0.3em; text-transform: uppercase; color: var(--ink-faint); margin-top: 12px; }
+
+.set-progress { display: flex; justify-content: space-between; align-items: baseline; margin: 2px 0 10px; }
+.set-progress .sp { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: 21px; color: var(--accent); }
+.set-progress .el { font-size: 11px; color: var(--ink-faint); }
+.done-set-btn { width: 100%; margin-top: 16px; padding: 22px; background: var(--accent); color: var(--bg); font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; text-transform: uppercase; font-size: 32px; letter-spacing: 0.1em; transition: transform 0.07s, box-shadow 0.2s; }
+.done-set-btn:active { transform: scale(0.98); box-shadow: 0 0 30px color-mix(in srgb, var(--accent) 55%, transparent); }
+.set-links { display: flex; justify-content: center; gap: 18px; margin-top: 14px; }
+.set-links button { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint); padding: 8px 4px; }
+.set-links button:active { color: var(--accent); }
+.form-steps { background: var(--paper); border: 1px solid var(--line); padding: 12px 16px 12px 32px; margin-top: 10px; font-size: 12px; color: var(--ink-dim); line-height: 1.6; }
+.form-steps li { margin-bottom: 6px; }
+
+.rest-wrap { text-align: center; padding-top: 7vh; }
+.rest-label { font-size: 11px; letter-spacing: 0.32em; text-transform: uppercase; color: var(--ink-faint); }
+.rest-num { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; font-size: min(30vh, 52vw); line-height: 0.9; color: var(--cool); }
+.rest-num.go { color: var(--accent); animation: countpop 0.4s; }
+.rest-track { height: 4px; background: var(--line-soft); margin: 12px 0 18px; }
+.rest-track .fill { height: 100%; background: var(--cool); transition: width 1s linear; }
+.rest-btns { display: flex; justify-content: center; gap: 10px; }
+.rest-btns button { font-size: 13px; padding: 12px 20px; border: 1px solid var(--line); color: var(--ink-dim); }
+.rest-btns .skip { background: var(--paper-hi); color: var(--cool); border-color: var(--c-dusty-bd); font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; text-transform: uppercase; font-size: 17px; letter-spacing: 0.08em; }
+.upnext-card { display: flex; align-items: center; gap: 12px; background: var(--paper); border: 1px solid var(--line); padding: 12px 14px; margin: 22px auto 0; max-width: 420px; text-align: left; animation: rise 0.4s both; }
+.upnext-card .uc { flex: 1; min-width: 0; }
+.upnext-card .uc .tag { font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--accent); }
+.upnext-card .uc .n { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; text-transform: uppercase; font-size: 19px; line-height: 1; display: block; }
+.upnext-card .uc .d { font-size: 11px; color: var(--ink-dim); }
+
+/* ── coach dock (fixed input + chips; killed the keyboard void) ── */
+.coach-msgs { display: flex; flex-direction: column; gap: 10px; padding-bottom: 168px; }
+.coach-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 700; background: var(--bg-elev); border-top: 1px solid var(--line); padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); will-change: transform; }
+.coach-chips { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 8px; scrollbar-width: none; }
+.coach-chips::-webkit-scrollbar { display: none; }
+.coach-chips button { flex-shrink: 0; font-family: 'Big Shoulders Display', sans-serif; font-weight: 700; text-transform: uppercase; font-size: 14px; letter-spacing: 0.05em; color: var(--accent); border: 1px solid var(--c-sage-bd); background: color-mix(in srgb, var(--accent) 6%, transparent); padding: 8px 14px; }
+.coach-chips button:active { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+@media (max-width: 880px) { .coach-dock { bottom: calc(58px + env(safe-area-inset-bottom)); padding-bottom: 10px; } .coach-msgs { padding-bottom: 190px; } }
 
 /* rest countdown pill */
 .rest-pill { position: fixed; left: 50%; transform: translateX(-50%); bottom: 22px; z-index: 950; display: none; align-items: center; gap: 10px; background: var(--bg-elev); border: 1px solid var(--c-dusty-bd); color: var(--cool); padding: 9px 14px; font-size: 15px; cursor: default; box-shadow: var(--shadow); overflow: hidden; }
@@ -691,7 +741,12 @@ function appMigrate(s) {
   s.bodyweight = s.bodyweight || []; s.cardio = s.cardio || [];
   s.plan = s.plan || null;
   s.activeWorkout = s.activeWorkout || null;
-  if (s.activeWorkout && typeof s.activeWorkout.focus !== 'number') s.activeWorkout.focus = 0;
+  if (s.activeWorkout) {
+    if (typeof s.activeWorkout.focus !== 'number') s.activeWorkout.focus = 0;
+    s.activeWorkout.mode = s.activeWorkout.mode || 'edit';   // in-flight v3 workout lands in the familiar table view
+    s.activeWorkout.cursor = s.activeWorkout.cursor || null;
+    if (s.activeWorkout.lastXi === undefined) s.activeWorkout.lastXi = null;
+  }
   s.settings.units = s.settings.units || 'lbs';
   s.settings.restDefault = s.settings.restDefault || 90;
   s.settings.claude.programNote = s.settings.claude.programNote ?? '';
@@ -904,13 +959,78 @@ function renderPlanCard() {
   return h;
 }
 
-/* thumbnails: youtube mqdefault when a videoUrl exists, volt monogram tile otherwise */
+/* ── free-exercise-db: automatic demo media (public domain / Unlicense, yuhonas/free-exercise-db) ──
+   Index fetched at most once per device; ONLY matched entries persist to localStorage (a few KB).
+   Image paths come from each entry's `images` array (name-derived dirs), never from `id`. */
+const EXDB_INDEX_URL = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
+const EXDB_IMG_PREFIX = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
+const EXDB_ALIASES = {   // classic-lift shorthand the db doesn't use (verified against the live db)
+  'overhead press': 'standing military press', 'ohp': 'standing military press',
+  'rdl': 'romanian deadlift',
+  'bench press': 'barbell bench press medium grip',
+  'squat': 'barbell squat', 'deadlift': 'barbell deadlift',
+  'pull up': 'pullups', 'pull ups': 'pullups', 'pullup': 'pullups',
+  'lat pulldown': 'wide grip lat pulldown',
+  'barbell row': 'bent over barbell row',
+};
+let EXDB_INDEX = null, EXDB_FETCHING = false;
+const exdbNorm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function exdbMap() { try { return JSON.parse(localStorage.getItem('cuaderno.exdb.v1') || '{}'); } catch (e) { return {}; } }
+function exdbMatch(key) {
+  const target = EXDB_ALIASES[key] || key;
+  let best = null, bestScore = -1;
+  for (const e of EXDB_INDEX) {
+    const n = exdbNorm(e.name);
+    if (n === target) { best = e; break; }
+    if (n.includes(target) || target.includes(n)) {
+      const tt = target.split(' '), nn = new Set(n.split(' '));
+      const score = tt.filter(t => nn.has(t)).length * 1000 - n.length;   // token overlap, then prefer the shortest (plain) variant
+      if (score > bestScore) { bestScore = score; best = e; }
+    }
+  }
+  if (!best || !best.images?.length) return null;
+  return { imgs: [EXDB_IMG_PREFIX + best.images[0], EXDB_IMG_PREFIX + (best.images[1] || best.images[0])], instructions: (best.instructions || []).slice(0, 6) };
+}
+function exdbResolve(ex) {
+  if (!ex?.name) return null;
+  const key = exdbNorm(ex.name);
+  const map = exdbMap();
+  if (map[key]) return map[key].miss ? null : map[key];
+  if (EXDB_INDEX) {
+    const entry = exdbMatch(key);
+    map[key] = entry || { miss: true };   // cache misses too (only once the index was consulted)
+    try { localStorage.setItem('cuaderno.exdb.v1', JSON.stringify(map)); } catch (e) {}
+    return entry;
+  }
+  exdbFetch();   // async; the next render upgrades the tile
+  return null;
+}
+async function exdbFetch() {
+  if (EXDB_INDEX || EXDB_FETCHING) return;
+  EXDB_FETCHING = true;
+  try {
+    const res = await fetch(EXDB_INDEX_URL);
+    if (res.ok) { EXDB_INDEX = await res.json(); renderView(); }
+  } catch (e) { console.warn('exdb fetch failed', e); }
+  EXDB_FETCHING = false;
+}
+/* media resolver chain: user video → exdb animation → null (monogram tile) */
+function resolveMedia(ex) {
+  if (!ex) return null;
+  const id = ytId(ex.videoUrl);
+  if (id) return { type: 'yt', id };
+  const hit = exdbResolve(ex);
+  if (hit) return { type: 'imgs', imgs: hit.imgs, instructions: hit.instructions };
+  return null;
+}
+/* thumbnails: yt thumb → exdb frame 0 → volt monogram */
 function thumbFor(ex, sm = false) {
   const cls = 'thumb' + (sm ? ' sm' : '');
-  const id = ytId(ex?.videoUrl);
   const mono = `<span class="${cls}">${escapeHtml((ex?.name || '?')[0])}</span>`;
-  if (!id) return mono;
-  return `<img class="${cls}" src="https://i.ytimg.com/vi/${id}/mqdefault.jpg" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='${mono.replace(/'/g, '&#39;')}'">`;
+  const id = ytId(ex?.videoUrl);
+  const src = id ? `https://i.ytimg.com/vi/${id}/mqdefault.jpg` : exdbResolve(ex)?.imgs[0];
+  if (!src) return mono;
+  return `<img class="${cls}" src="${src}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.outerHTML='${mono.replace(/'/g, '&#39;')}'">`;
 }
 
 /* ═══ ACTIVE WORKOUT ═══ */
@@ -928,40 +1048,50 @@ function buildRows(exId, target = null) {
   }
   return rows;
 }
-function startWorkout() {
-  if (state.activeWorkout) { nav('workout'); return; }
-  const p = state.plan;
-  if (p && p.days?.length) { startPlanDay(); return; }
-  const s = todaySession(true);
-  delete s.endedAt;   // re-opening a finished day: session is live again (boot resume checks !endedAt)
-  state.activeWorkout = { sessionId: s.id, planDayId: null, rest: null, focus: 0, exercises: [] };
-  // resume rows for anything already logged today (e.g. app reopened after a finished block)
+function nextUndone(aw, after = null) {
+  // first row that is neither done nor skipped, in workout order; `after` = {xi,ri} to search strictly beyond
+  for (let xi = 0; xi < aw.exercises.length; xi++) {
+    for (let ri = 0; ri < aw.exercises[xi].rows.length; ri++) {
+      if (after && (xi < after.xi || (xi === after.xi && ri <= after.ri))) continue;
+      const row = aw.exercises[xi].rows[ri];
+      if (!row.done && !row.skipped) return { xi, ri };
+    }
+  }
+  if (after) return nextUndone(aw);   // wrap: anything left before the cursor
+  return null;
+}
+function foldLoggedRows(s, aw) {
+  // anything already logged in this session appears as done rows (resumed/finished-earlier days)
   for (const en of s.entries) {
     if (!en.sets.length) continue;
-    state.activeWorkout.exercises.push({ exerciseId: en.exerciseId, rows: en.sets.map(x => ({ w: x.w, r: x.r, rpe: x.rpe, done: true, ts: x.ts })) });
-  }
-  save(); nav('workout');
-  if (!state.activeWorkout.exercises.length) openPicker();
-}
-function startPlanDay() {
-  const p = state.plan;
-  const day = p.days[p.cursor % p.days.length];
-  const s = todaySession(true);
-  delete s.endedAt;   // see startWorkout
-  s.planDayId = day.id;
-  state.activeWorkout = {
-    sessionId: s.id, planDayId: day.id, rest: null, focus: 0,
-    exercises: day.exercises.map(t => ({ exerciseId: t.exerciseId, rows: buildRows(t.exerciseId, t) })),
-  };
-  // fold in anything already logged today for those exercises
-  for (const en of s.entries) {
-    const wx = state.activeWorkout.exercises.find(x => x.exerciseId === en.exerciseId);
-    const doneRows = en.sets.map(x => ({ w: x.w, r: x.r, rpe: x.rpe, done: true, ts: x.ts }));
+    const doneRows = en.sets.map(x => ({ w: x.w, r: x.r, rpe: x.rpe, done: true, ts: x.ts, pr: x.pr }));
+    const wx = aw.exercises.find(x => x.exerciseId === en.exerciseId);
     if (wx) wx.rows = [...doneRows, ...wx.rows.slice(doneRows.length)];
-    else if (en.sets.length) state.activeWorkout.exercises.push({ exerciseId: en.exerciseId, rows: doneRows });
+    else aw.exercises.push({ exerciseId: en.exerciseId, rows: doneRows });
   }
+}
+function startWorkout() {
+  if (state.activeWorkout) { nav('workout'); return; }   // resume whatever runner screen it was on
+  const s = todaySession(true);
+  delete s.endedAt;   // re-opening a finished day: session is live again (boot resume checks !endedAt)
+  const aw = { sessionId: s.id, planDayId: null, rest: null, focus: 0, mode: 'brief', cursor: null, setStartedAt: null, countStartedAt: null, lastXi: null, exercises: [] };
+  state.activeWorkout = aw;   // set before buildRows so the prefill excludes this session
+  const p = state.plan;
+  if (p && p.days?.length) {
+    const day = p.days[p.cursor % p.days.length];
+    s.planDayId = day.id; aw.planDayId = day.id;
+    aw.exercises = day.exercises.map(t => ({ exerciseId: t.exerciseId, rows: buildRows(t.exerciseId, t) }));
+  } else {
+    const lastS = sessionsDesc().find(x => x.id !== s.id && sessionSets(x) > 0);
+    if (lastS) aw.exercises = lastS.entries.filter(en => en.sets.length && exById(en.exerciseId)).map(en => ({ exerciseId: en.exerciseId, rows: buildRows(en.exerciseId) }));
+    else {
+      const { freq } = exScore();
+      aw.exercises = Object.keys(freq).sort((a, b) => freq[b] - freq[a]).slice(0, 4).filter(exById).map(id => ({ exerciseId: id, rows: buildRows(id) }));
+    }
+  }
+  foldLoggedRows(s, aw);
   save(); nav('workout');
-  toast(day.name + ' — go.');
+  if (!aw.exercises.length) { PICKER_CTX = { type: 'add' }; openPicker(); }
 }
 function addExerciseToWorkout(exId) {
   const aw = state.activeWorkout; if (!aw) return;
@@ -974,18 +1104,203 @@ function addExerciseToWorkout(exId) {
   save();
   renderView();
 }
+function swapExercise(xi, exId) {
+  const aw = state.activeWorkout; if (!aw || !aw.exercises[xi]) return;
+  aw.exercises[xi] = { exerciseId: exId, rows: buildRows(exId) };
+  save();
+  renderView();
+}
 function setFocus(i) {
   const aw = state.activeWorkout; if (!aw || !aw.exercises.length) return;
   aw.focus = Math.max(0, Math.min(aw.exercises.length - 1, i));
   save({ push: false });
   renderView();
 }
+/* runner transitions */
+function runnerGo() {   // LET'S GO ▶ from brief
+  const aw = state.activeWorkout; if (!aw) return;
+  aw.cursor = nextUndone(aw);
+  if (!aw.cursor) { aw.mode = 'edit'; save({ push: false }); renderView(); toast('all sets already logged — review or FINISH.'); return; }
+  aw.mode = 'count'; aw.countStartedAt = Date.now();
+  save({ push: false }); renderView();
+}
+function runnerDoneSet() {
+  const aw = state.activeWorkout; if (!aw || !aw.cursor) return;
+  const { xi, ri } = aw.cursor;
+  checkRow(xi, ri);              // logs the set, PR toast, starts rest, saves
+  aw.lastXi = xi;
+  aw.cursor = nextUndone(aw, { xi, ri });
+  if (!aw.cursor) { finishWorkout(); return; }
+  aw.mode = 'rest';
+  save({ push: false }); renderView();
+}
+function runnerSkip(scope) {     // 'set' | 'exercise'
+  const aw = state.activeWorkout; if (!aw || !aw.cursor) return;
+  const { xi, ri } = aw.cursor;
+  if (scope === 'set') aw.exercises[xi].rows[ri].skipped = true;
+  else aw.exercises[xi].rows.forEach(r => { if (!r.done) r.skipped = true; });
+  aw.lastXi = xi;
+  aw.cursor = nextUndone(aw);
+  if (!aw.cursor) { finishWorkout(); return; }
+  startRest();                   // breathing room to move on, per the runner flow
+  aw.mode = 'rest';
+  save({ push: false }); renderView();
+}
+function runnerAdvanceFromRest() {
+  const aw = state.activeWorkout; if (!aw) return;
+  aw.rest = null;
+  aw.mode = 'set'; aw.setStartedAt = Date.now();
+  save({ push: false }); renderView();
+}
+function runnerResume() {        // ▶ from edit view back into the runner
+  const aw = state.activeWorkout; if (!aw) return;
+  aw.cursor = nextUndone(aw);
+  if (!aw.cursor) { toast('all sets done — hit FINISH.'); return; }
+  aw.mode = 'set'; aw.setStartedAt = Date.now();
+  save({ push: false }); renderView();
+}
 function renderWorkout() {
   const aw = state.activeWorkout;
   const s = sessionById(aw.sessionId);
   if (!s) { state.activeWorkout = null; save(); nav('home'); return; }
-  if (!aw.exercises.length) {   // empty workout: just chrome + add
-    viewRoot.innerHTML = playerHead() + `<div class="player-body"><button class="big-add ghost chamfer" data-act="add-exercise" style="margin-top:30vh">+ EXERCISE</button></div>` + playerNav();
+  if (!aw.mode) aw.mode = 'edit';
+  if (aw.mode === 'brief') return renderBrief();
+  if (aw.mode === 'count') return renderCount();
+  if (aw.mode === 'set') return renderSet();
+  if (aw.mode === 'rest') return renderRestScreen();
+  return renderEdit();
+}
+VIEWS.workout = renderWorkout;
+function playerHead(mode) {
+  return `<div class="player-head">
+    <span class="wk-time" id="wk-elapsed">0:00</span>
+    <span class="wk-meta" id="wk-meta">${wkMetaText()}</span>
+    ${mode === 'edit' ? '<button class="wk-cancel" data-act="resume-runner" title="resume runner" style="color:var(--accent)">▶</button>' : ''}
+    <button class="wk-cancel" data-act="cancel-workout" title="cancel workout">✕</button>
+    <button class="wk-finish chamfer" data-act="finish-workout">FINISH</button>
+  </div>`;
+}
+function mediaPanel(ex) {
+  const m = resolveMedia(ex);
+  if (m?.type === 'yt') return `<div class="media-panel"><iframe src="https://www.youtube-nocookie.com/embed/${m.id}" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`;
+  const tile = `<div class="mono-tile">
+    <span class="big">${escapeHtml((ex?.name || '?')[0])}</span>
+    <div class="row">
+      <button data-act="find-video" data-id="${ex?.id}">▶ find video</button>
+      <button data-act="ex-edit" data-id="${ex?.id}">✎ paste link</button>
+    </div>
+  </div>`;
+  const img = m?.type === 'imgs'
+    ? `<img class="flipimg" id="media-flip" src="${m.imgs[0]}" data-i0="${m.imgs[0]}" data-i1="${m.imgs[1]}" data-cur="0" referrerpolicy="no-referrer" onerror="this.remove()">`
+    : '';
+  return `<div class="media-panel">${tile}${img}</div>`;
+}
+/* ── BRIEF ── */
+function renderBrief() {
+  const aw = state.activeWorkout;
+  const planDay = state.plan?.days.find(d => d.id === aw.planDayId);
+  let body = `<div class="player-body">
+    <div class="brief-title">THIS SESSION<span style="color:var(--accent)">.</span></div>
+    <div class="brief-sub">${planDay ? `PLAN · ${escapeHtml(state.plan.name)} · ${escapeHtml(planDay.name)}` : aw.exercises.length ? 'based on your last session' : 'pick your exercises'}</div>`;
+  aw.exercises.forEach((wx, xi) => {
+    const ex = exById(wx.exerciseId);
+    const live = wx.rows.filter(r => !r.skipped);
+    const target = `${live.length}×${live[0]?.r ?? 8}${live[0]?.w ? ' @ ' + fmtN(dispW(live[0].w)) : ''}`;
+    body += `<div class="brief-row" style="animation-delay:${0.04 * xi}s">${thumbFor(ex)}
+      <span class="bi"><span class="n">${escapeHtml(ex?.name || '?')}</span><span class="t">${target}</span></span>
+      <button class="vbtn" data-act="brief-swap" data-xi="${xi}" title="swap exercise">⇄</button>
+    </div>`;
+  });
+  body += `<button class="wk-add-set" data-act="add-exercise">+ add exercise</button>
+    <button class="big-add chamfer" data-act="lets-go" style="margin-top:16px">LET'S GO ▶</button>
+    <button class="btn-secondary" data-act="edit-session" style="width:100%">edit session</button>
+  </div>`;
+  viewRoot.innerHTML = playerHead('brief') + body;
+  wkTick();
+}
+/* ── COUNT ── */
+function renderCount() {
+  viewRoot.innerHTML = playerHead('count') + `<div class="player-body"><div class="count-wrap">
+    <div class="count-num" id="count-num">3</div>
+    <div class="count-sub" id="count-sub">get set</div>
+  </div></div>`;
+  wkTick();
+}
+/* ── SET ── */
+function renderSet() {
+  const aw = state.activeWorkout;
+  if (!aw.cursor) { runnerResume(); return; }
+  const { xi, ri } = aw.cursor;
+  const wx = aw.exercises[xi];
+  const ex = exById(wx.exerciseId);
+  const row = wx.rows[ri];
+  const prev = lastSetsFor(wx.exerciseId, aw.sessionId);
+  const ps = prev?.sets[ri];
+  const m = resolveMedia(ex);
+  let body = `<div class="player-body">` + mediaPanel(ex);
+  body += `<div class="px-name">${escapeHtml(ex?.name || '?')}</div>`;
+  body += `<div class="set-progress"><span class="sp">SET ${ri + 1}/${wx.rows.length}</span><span class="el" id="set-elapsed"></span></div>`;
+  if (prev) body += `<div class="px-last">LAST: <span class="v">${ps ? fmtN(dispW(ps.w)) + '×' + ps.r : prev.sets.length + ' sets'}</span> (${prev.date.slice(5)})</div>`;
+  body += `<div class="set-table">
+    <span class="th">SET</span><span class="th">PREV</span><span class="th"></span><span class="th">${unitLbl().toUpperCase()}</span><span class="th"></span><span class="th">REPS</span><span class="th"></span>
+    <div class="tr" data-xi="${xi}" data-ri="${ri}">
+      <span class="td sn">${ri + 1}</span>
+      <span class="td prev" data-act="copy-prev" data-xi="${xi}" data-ri="${ri}">${ps ? `<span>${fmtN(dispW(ps.w))}</span><span>×${ps.r}</span>` : '—'}</span>
+      <button class="st" data-act="step-w" data-d="-1" data-xi="${xi}" data-ri="${ri}">−</button>
+      <span class="td"><input inputmode="decimal" data-fld="w" data-xi="${xi}" data-ri="${ri}" value="${fmtN(dispW(row.w))}"></span>
+      <button class="st" data-act="step-w" data-d="1" data-xi="${xi}" data-ri="${ri}">+</button>
+      <span class="td"><input inputmode="numeric" data-fld="r" data-xi="${xi}" data-ri="${ri}" value="${row.r}"></span>
+      <span class="td"><button class="ck" data-act="done-set">○</button></span>
+    </div>
+  </div>
+  <button class="done-set-btn chamfer" data-act="done-set">✓ DONE SET</button>
+  <div class="set-links">
+    <button data-act="skip-set">skip set</button>
+    <button data-act="skip-ex">skip exercise</button>
+    <button data-act="edit-session">✎ edit</button>
+  </div>`;
+  if (m?.type === 'imgs' && m.instructions?.length) {
+    body += `<button class="wk-add-set" data-act="toggle-form">ⓘ form</button>
+    <ol class="form-steps" id="form-steps" hidden>${m.instructions.map(t => `<li>${escapeHtml(t)}</li>`).join('')}</ol>`;
+  }
+  body += `</div>`;
+  viewRoot.innerHTML = playerHead('set') + body;
+  wkTick();
+}
+/* ── REST ── */
+function renderRestScreen() {
+  const aw = state.activeWorkout;
+  const cur = aw.cursor;
+  let upnext = '';
+  if (cur) {
+    const wx = aw.exercises[cur.xi];
+    const ex = exById(wx.exerciseId);
+    const row = wx.rows[cur.ri];
+    const newEx = aw.lastXi !== null && cur.xi !== aw.lastXi;
+    upnext = `<div class="upnext-card chamfer">${thumbFor(ex)}
+      <span class="uc"><span class="tag">${newEx ? 'NEW EXERCISE' : 'UP NEXT'}</span>
+      <span class="n">${escapeHtml(ex?.name || '?')}</span>
+      <span class="d">SET ${cur.ri + 1}/${wx.rows.length} @ ${fmtN(dispW(row.w))}×${row.r}</span></span>
+    </div>`;
+  }
+  viewRoot.innerHTML = playerHead('rest') + `<div class="player-body"><div class="rest-wrap">
+    <div class="rest-label">REST</div>
+    <div class="rest-num" id="rest-big">—</div>
+    <div class="rest-track"><div class="fill" id="rest-big-bar" style="width:100%"></div></div>
+    <div class="rest-btns">
+      <button data-act="rest-bump" data-d="-15">−15</button>
+      <button class="skip" data-act="rest-skip">SKIP ›</button>
+      <button data-act="rest-bump" data-d="15">+15</button>
+    </div>
+    ${upnext}
+  </div></div>`;
+  wkTick();
+}
+/* ── EDIT (the v3 table player) ── */
+function renderEdit() {
+  const aw = state.activeWorkout;
+  if (!aw.exercises.length) {
+    viewRoot.innerHTML = playerHead('edit') + `<div class="player-body"><button class="big-add ghost chamfer" data-act="add-exercise" style="margin-top:30vh">+ EXERCISE</button></div>` + playerNav();
     wkTick(); return;
   }
   const xi = Math.max(0, Math.min(aw.exercises.length - 1, aw.focus || 0));
@@ -1004,7 +1319,7 @@ function renderWorkout() {
   wx.rows.forEach((row, ri) => {
     const ps = prev?.sets[ri];
     body += `<div class="tr${row.done ? ' done' : ''}" data-xi="${xi}" data-ri="${ri}">
-      <span class="td sn">${ri + 1}</span>
+      <span class="td sn">${row.skipped ? '·' : ri + 1}</span>
       <span class="td prev" data-act="copy-prev" data-xi="${xi}" data-ri="${ri}">${ps ? `<span>${fmtN(dispW(ps.w))}</span><span>×${ps.r}</span>` : '—'}</span>
       <button class="st" data-act="step-w" data-d="-1" data-xi="${xi}" data-ri="${ri}">−</button>
       <span class="td"><input inputmode="decimal" data-fld="w" data-xi="${xi}" data-ri="${ri}" value="${fmtN(dispW(row.w))}" ${row.done ? 'readonly' : ''}></span>
@@ -1014,28 +1329,8 @@ function renderWorkout() {
     </div>`;
   });
   body += `</div><button class="wk-add-set" data-act="add-set" data-xi="${xi}">+ add set</button></div>`;
-  viewRoot.innerHTML = playerHead() + body + ovStrip() + playerNav();
+  viewRoot.innerHTML = playerHead('edit') + body + ovStrip() + playerNav();
   wkTick();
-}
-VIEWS.workout = renderWorkout;
-function playerHead() {
-  return `<div class="player-head">
-    <span class="wk-time" id="wk-elapsed">0:00</span>
-    <span class="wk-meta" id="wk-meta">${wkMetaText()}</span>
-    <button class="wk-cancel" data-act="cancel-workout" title="cancel workout">✕</button>
-    <button class="wk-finish chamfer" data-act="finish-workout">FINISH</button>
-  </div>`;
-}
-function mediaPanel(ex) {
-  const id = ytId(ex?.videoUrl);
-  if (id) return `<div class="media-panel"><iframe src="https://www.youtube-nocookie.com/embed/${id}" allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>`;
-  return `<div class="media-panel"><div class="mono-tile">
-    <span class="big">${escapeHtml((ex?.name || '?')[0])}</span>
-    <div class="row">
-      <button data-act="find-video" data-id="${ex?.id}">▶ find video</button>
-      <button data-act="ex-edit" data-id="${ex?.id}">✎ paste link</button>
-    </div>
-  </div></div>`;
 }
 function ovStrip() {
   const aw = state.activeWorkout;
@@ -1139,7 +1434,7 @@ function addSet(xi) {
 }
 function finishWorkout() {
   const aw = state.activeWorkout; if (!aw) return;
-  const unchecked = aw.exercises.reduce((n, x) => n + x.rows.filter(r => !r.done).length, 0);
+  const unchecked = aw.exercises.reduce((n, x) => n + x.rows.filter(r => !r.done && !r.skipped).length, 0);
   if (unchecked && !confirm(`Discard ${unchecked} unchecked set${unchecked > 1 ? 's' : ''} and finish?`)) return;
   const s = sessionById(aw.sessionId);
   if (s) {
@@ -1240,7 +1535,8 @@ function bumpRest(deltaSec) {
 function restRender() {
   const pill = document.getElementById('rest-pill');
   const r = state.activeWorkout?.rest;
-  if (!r || ROUTE.view !== 'workout') { pill.classList.remove('show', 'zero'); return; }
+  // pill only in EDIT mode — the runner renders rest as a full screen
+  if (!r || ROUTE.view !== 'workout' || state.activeWorkout?.mode !== 'edit') { pill.classList.remove('show', 'zero'); return; }
   const remain = r.endsAt - Date.now();
   pill.classList.add('show');
   if (remain <= 0) {
@@ -1256,6 +1552,7 @@ function restRender() {
   document.getElementById('rest-time').textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
   document.getElementById('rest-bar').style.width = Math.max(0, 100 * remain / r.dur) + '%';
 }
+let _lastCount = null;
 function wkTick() {
   const aw = state.activeWorkout;
   if (aw && ROUTE.view === 'workout') {
@@ -1265,6 +1562,61 @@ function wkTick() {
       const sec = Math.floor((Date.now() - s.startedAt) / 1000);
       el.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
     }
+    // COUNT: 3 → 2 → 1 → GO, driven off countStartedAt (reload-safe)
+    if (aw.mode === 'count' && aw.countStartedAt) {
+      const sec = Math.floor((Date.now() - aw.countStartedAt) / 1000);
+      if (sec >= 4) {
+        _lastCount = null;
+        aw.mode = 'set'; aw.setStartedAt = Date.now();
+        save({ push: false }); renderView();
+      } else {
+        const label = sec >= 3 ? 'GO' : String(3 - sec);
+        const num = document.getElementById('count-num');
+        if (num && num.textContent !== label) {
+          num.textContent = label;
+          num.style.animation = 'none'; void num.offsetWidth; num.style.animation = '';
+          if (_lastCount !== label) { _lastCount = label; try { navigator.vibrate?.(60); } catch (e) {} }
+          const sub = document.getElementById('count-sub'); if (sub && label === 'GO') sub.textContent = '';
+        }
+      }
+    }
+    // REST screen: countdown + GO flash + auto-advance
+    if (aw.mode === 'rest') {
+      const big = document.getElementById('rest-big');
+      const bar = document.getElementById('rest-big-bar');
+      const r = aw.rest;
+      if (!r) { runnerAdvanceFromRest(); }
+      else {
+        const remain = r.endsAt - Date.now();
+        if (remain <= 0) {
+          if (!r.buzzed) { r.buzzed = true; try { navigator.vibrate?.([200, 100, 200]); } catch (e) {} }
+          if (big) { big.textContent = 'GO'; big.classList.add('go'); }
+          if (bar) bar.style.width = '100%';
+          if (!r.goAt) r.goAt = Date.now();
+          else if (Date.now() - r.goAt > 900) runnerAdvanceFromRest();
+        } else if (big) {
+          const sec = Math.ceil(remain / 1000);
+          big.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+          big.classList.remove('go');
+          if (bar) bar.style.width = Math.max(0, 100 * remain / r.dur) + '%';
+        }
+      }
+    }
+    // SET screen: working-set elapsed
+    if (aw.mode === 'set' && aw.setStartedAt) {
+      const se = document.getElementById('set-elapsed');
+      if (se) {
+        const sec = Math.floor((Date.now() - aw.setStartedAt) / 1000);
+        se.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+      }
+    }
+  }
+  // exdb two-frame animation (any screen with a flip image)
+  const flip = document.getElementById('media-flip');
+  if (flip) {
+    const cur = flip.dataset.cur === '1' ? '0' : '1';
+    const next = flip.dataset['i' + cur];
+    if (next) { flip.src = next; flip.dataset.cur = cur; }
   }
   restRender();
 }
@@ -1474,21 +1826,50 @@ function appBuildClaudeSystem() {
     coachContext(),
   ].join('\n');
 }
+const COACH_CHIPS = [
+  ['BUILD ME A PROGRAM', 'Build me a training program that fits my recent data and my program note. Propose it as a plan I can accept.'],
+  ['SWAP AN EXERCISE', 'Suggest a swap for one exercise in my current plan that keeps a similar stimulus — name the exercise, the replacement, and why.'],
+  ['DELOAD WEEK', 'Build me a one-week deload version of my current training (lighter loads, lower volume). Propose it as a plan I can accept.'],
+  ['WHY AM I STALLING?', 'Look at my recent numbers and e1RM trends — where am I stalling and what specifically should I change?'],
+];
 function renderCoachScreen() {
   viewRoot.innerHTML = `<div class="screen-head"><h2>COACH<span style="color:var(--accent)">.</span></h2><span class="sub">sees your log, e1RMs, bodyweight</span></div>
-  <div class="coach-screen">
-    <div class="coach-body" id="coach-msgs"></div>
-    <div class="coach-input">
-      <textarea id="coach-text" placeholder="ask for a program, a deload, exercise swaps…"></textarea>
+  <div class="coach-msgs" id="coach-msgs"></div>
+  <div class="coach-dock" id="coach-dock">
+    <div class="coach-chips" id="coach-chips">${COACH_CHIPS.map((c, i) => `<button data-chip="${i}">${c[0]}</button>`).join('')}</div>
+    <div class="coach-input" style="padding:0;border:none">
+      <textarea id="coach-text" placeholder="or type anything…"></textarea>
       <button class="btn-primary chamfer" id="coach-send">SEND</button>
     </div>
   </div>`;
-  if (!COACH.msgs.length) COACH.msgs.push({ role: 'ai', text: "I can read your log. Ask for a program (“build me a 4-day upper/lower”), a deload, or why your bench stalled." });
+  if (!COACH.msgs.length) COACH.msgs.push({ role: 'ai', text: 'I can read your log. Tap a chip below — or ask anything: programs, deloads, swaps, plateaus.' });
   renderCoach();
   document.getElementById('coach-send').addEventListener('click', coachSend);
   document.getElementById('coach-text').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); coachSend(); } });
+  document.getElementById('coach-chips').addEventListener('click', e => {
+    const b = e.target.closest('[data-chip]'); if (!b) return;
+    document.getElementById('coach-text').value = COACH_CHIPS[+b.dataset.chip][1];
+    coachSend();
+  });
+  bindVisualViewport();
 }
 VIEWS.coach = renderCoachScreen;
+/* iOS keyboard: keep the dock above the keyboard and the chat pinned to bottom */
+let _vvBound = false;
+function bindVisualViewport() {
+  if (_vvBound || !window.visualViewport) return;
+  _vvBound = true;
+  const adjust = () => {
+    const dock = document.getElementById('coach-dock');
+    if (!dock) return;
+    const off = Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop);
+    dock.style.transform = off ? `translateY(-${off}px)` : '';
+    const msgs = document.getElementById('coach-msgs');
+    if (msgs) window.scrollTo(0, document.body.scrollHeight);
+  };
+  visualViewport.addEventListener('resize', adjust);
+  visualViewport.addEventListener('scroll', adjust);
+}
 function renderCoach() {
   const root = document.getElementById('coach-msgs');
   if (!root) return;
@@ -1499,7 +1880,7 @@ function renderCoach() {
     return `<div class="msg ${m.role === 'user' ? 'me' : 'ai'}${m.thinking ? ' thinking' : ''}">${escapeHtml(m.text)}</div>`;
   }).join('');
   root.querySelectorAll('[data-accept]').forEach(b => b.addEventListener('click', () => acceptPlan(COACH.msgs[+b.dataset.accept].plan)));
-  root.scrollTop = root.scrollHeight;
+  window.scrollTo(0, document.body.scrollHeight);   // chat pins to bottom (page is the scroller; dock is fixed)
 }
 function extractPlan(text) {
   const m = text.match(/```json\s*([\s\S]*?)```/);
@@ -1572,8 +1953,20 @@ async function callClaudeChat(messages, maxTokens = 1400) {
   return data.content?.[0]?.text || '(empty response)';
 }
 
-/* ═══ picker (sheet) — adds exercises to the live workout ═══ */
+/* ═══ picker (sheet) — adds exercises to the live workout (or swaps one, from BRIEF) ═══ */
 const pickerModal = document.getElementById('picker-modal');
+let PICKER_CTX = { type: 'add' };
+function pickerApply(exId) {
+  if (!state.activeWorkout) {   // safety: picker outside a workout starts one
+    const s = todaySession(true);
+    delete s.endedAt;
+    state.activeWorkout = { sessionId: s.id, planDayId: null, rest: null, focus: 0, mode: 'brief', cursor: null, setStartedAt: null, countStartedAt: null, lastXi: null, exercises: [] };
+  }
+  if (PICKER_CTX.type === 'swap') swapExercise(PICKER_CTX.xi, exId);
+  else addExerciseToWorkout(exId);
+  PICKER_CTX = { type: 'add' };
+  nav('workout');
+}
 function openPicker() {
   document.getElementById('picker-search').value = '';
   renderPicker('');
@@ -1633,6 +2026,16 @@ viewRoot.addEventListener('click', e => {
   if (act === 'start-workout') startWorkout();
   else if (act === 'finish-workout') finishWorkout();
   else if (act === 'cancel-workout') cancelWorkout();
+  else if (act === 'lets-go') runnerGo();
+  else if (act === 'done-set') runnerDoneSet();
+  else if (act === 'skip-set') runnerSkip('set');
+  else if (act === 'skip-ex') runnerSkip('exercise');
+  else if (act === 'edit-session') { const aw = state.activeWorkout; if (aw) { aw.mode = 'edit'; save({ push: false }); renderView(); } }
+  else if (act === 'resume-runner') runnerResume();
+  else if (act === 'rest-skip') runnerAdvanceFromRest();
+  else if (act === 'rest-bump') { bumpRest(+el.dataset.d); }
+  else if (act === 'brief-swap') { PICKER_CTX = { type: 'swap', xi: +el.dataset.xi }; openPicker(); }
+  else if (act === 'toggle-form') { const fs = document.getElementById('form-steps'); if (fs) fs.hidden = !fs.hidden; }
   else if (act === 'check-row') checkRow(+el.dataset.xi, +el.dataset.ri);
   else if (act === 'add-set') addSet(+el.dataset.xi);
   else if (act === 'add-exercise') openPicker();
@@ -1693,27 +2096,18 @@ document.getElementById('picker-list').addEventListener('click', e => {
   if (!el) return;
   if (el.dataset.act === 'ex-video') { openVideo(exById(el.dataset.id)); return; }
   if (el.dataset.act === 'pick-exercise') {
+    pickerApply(el.dataset.id);   // BEFORE close(): the close event resets PICKER_CTX
     pickerModal.close();
-    if (!state.activeWorkout) {   // safety: picker outside a workout starts one
-      const s = todaySession(true);
-      state.activeWorkout = { sessionId: s.id, planDayId: null, rest: null, exercises: [] };
-    }
-    addExerciseToWorkout(el.dataset.id);
-    nav('workout');
   }
   if (el.dataset.act === 'create-exercise') {
     const name = el.dataset.name;
     const ex = { id: uid(), name, step: 5, videoQuery: name + ' exercise form', createdAt: Date.now() };
     state.exercises.push(ex); save();
+    pickerApply(ex.id);
     pickerModal.close();
-    if (!state.activeWorkout) {
-      const s = todaySession(true);
-      state.activeWorkout = { sessionId: s.id, planDayId: null, rest: null, exercises: [] };
-    }
-    addExerciseToWorkout(ex.id);
-    nav('workout');
   }
 });
+pickerModal.addEventListener('close', () => { PICKER_CTX = { type: 'add' }; });
 async function editExercise(exId) {
   const ex = exById(exId); if (!ex) return;
   const url = await askPrompt('Demo video', 'Paste a YouTube URL for ' + ex.name + ' (empty clears it)', ex.videoUrl || '');

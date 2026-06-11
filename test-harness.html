@@ -1,7 +1,7 @@
 <!DOCTYPE html>
-<!-- Cuaderno deploy-gate harness: drives the app in an iframe and writes PASS/FAIL lines into #out.
-     Run: python3 -m http.server → headless Chrome --virtual-time-budget=12000 --dump-dom http://localhost:PORT/test-harness.html
-     Greps: "HARNESS:" lines in the dumped DOM. Uses localStorage of the test origin only. -->
+<!-- Cuaderno v4 deploy-gate harness: drives the Session Runner in an iframe; writes PASS/FAIL lines into #out.
+     Run: python3 -m http.server → chrome --headless --virtual-time-budget=25000 --dump-dom http://localhost:PORT/test-harness.html
+     exdb is tested WITHOUT network by pre-seeding localStorage['cuaderno.exdb.v1']. -->
 <html>
 <body>
 <pre id="out"></pre>
@@ -9,7 +9,7 @@
 <script>
 'use strict';
 const out = [];
-function log(name, ok, extra) { out.push(`HARNESS: ${ok ? 'PASS' : 'FAIL'} — ${name}${extra ? ' — ' + extra : ''}`); render(); }
+function log(name, ok, extra) { out.push(`HARNESS: ${ok ? 'PASS' : 'FAIL'} >> ${name}${extra ? ' >> ' + extra : ''}`); render(); }
 function render() { document.getElementById('out').textContent = out.join('\n'); }
 const f = document.getElementById('f');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -17,117 +17,115 @@ function W() { return f.contentWindow; }
 function D() { return f.contentDocument; }
 function q(sel) { return D().querySelector(sel); }
 function state() { return JSON.parse(W().localStorage.getItem('cuaderno.v1')); }
+function aw() { return state().activeWorkout; }
+const GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==';
+function seedExdb() {
+  const names = ['squat', 'bench press', 'deadlift', 'overhead press', 'barbell row', 'pull up'];
+  const map = {};
+  for (const n of names) map[n] = { imgs: [GIF, GIF], instructions: ['Step one.', 'Step two.'] };
+  W().localStorage.setItem('cuaderno.exdb.v1', JSON.stringify(map));
+}
+async function loadApp() {
+  f.src = 'index.html';
+  await new Promise(r => f.onload = r);
+  await sleep(600);
+}
 
 (async () => {
   try {
-    localStorage.clear();   // same origin as iframe → fresh app state
-    // 1. boot
-    f.src = 'index.html';
-    await new Promise(r => f.onload = r);
-    await sleep(600);
+    localStorage.clear();
+    await loadApp();
+    seedExdb();   // pre-seed exdb cache (no network in tests); takes effect on next render
+
+    // ── boot ──
     log('boot: HOME renders START WORKOUT', !!q('[data-act="start-workout"]'));
     log('boot: week strip present', !!q('.week-strip'));
     log('boot: no plan card on fresh state', !q('.plan-card'));
 
-    // 2. 3-tap test: START → pick exercise → ✓
-    q('[data-act="start-workout"]').click();           // tap 1
+    // ── runner: fresh start → brief (+auto picker) → LET'S GO → count → set ──
+    q('[data-act="start-workout"]').click();                       // TAP 1
     await sleep(400);
+    log('runner: brief mode on start', aw()?.mode === 'brief');
     const pick = q('#picker-list [data-act="pick-exercise"]');
-    log('picker auto-opens on empty start', !!pick);
-    pick.click();                                      // tap 2
+    log('runner: picker auto-opens when session empty', !!pick);
+    pick.click();
     await sleep(400);
-    log('workout view: set table rendered', !!q('.set-table'));
-    log('workout view: rows prefilled', !!q('.set-table input[data-fld="w"]') && q('.set-table input[data-fld="w"]').value.length > 0);
-    log('player: media panel with FIND VIDEO tile (no url yet)', !!q('.media-panel .mono-tile [data-act="find-video"]'));
-    log('player: nav bar present', !!q('.player-nav .pn-next'));
-    // stepper bumps the weight input by the exercise step
-    const w0 = q('.set-table input[data-fld="w"]');
-    const before = parseFloat(w0.value);
-    q('[data-act="step-w"][data-d="1"]').click();
-    await sleep(150);
-    const stepEx = state().exercises.find(x => x.id === state().activeWorkout.exercises[0].exerciseId);
-    log('player: weight stepper +step', Math.abs(parseFloat(q('.set-table input[data-fld="w"]').value) - (before + (stepEx.step || 5))) < 0.01, `${before} -> ${q('.set-table input[data-fld="w"]').value}`);
-    q('[data-act="step-w"][data-d="-1"]').click();   // back to baseline
-    await sleep(150);
-    const ck = q('[data-act="check-row"]');
-    ck.click();                                        // tap 3
+    log('brief: exercise row listed', !!q('.brief-row'));
+    log('brief: exdb thumb upgrades the row', !!q('.brief-row img.thumb'));
+    log('brief: LET\'S GO present', !!q('[data-act="lets-go"]'));
+    q('[data-act="lets-go"]').click();                             // TAP 2
     await sleep(300);
+    log('count: 3-2-1 screen renders', aw().mode === 'count' && !!q('#count-num'));
+
+    // reload mid-count → countStartedAt resumes/advances correctly
+    await loadApp();
+    log('count: mode survives reload', D().body.dataset.view === 'workout' && ['count', 'set'].includes(aw().mode));
+    await sleep(4600);                                             // let 3-2-1-GO elapse (virtual time)
+    log('count → set: auto-advanced', aw().mode === 'set' && !!q('.done-set-btn'));
+    log('set: media animation (exdb) present', !!q('#media-flip'));
+    log('set: ⓘ form steps available', !!q('[data-act="toggle-form"]'));
+    log('set: SET 1/N progress shown', /SET 1\//.test(q('.set-progress .sp')?.textContent || ''));
+    log('set: weight input prefilled', (q('.set-table input[data-fld="w"]')?.value || '').length > 0);
+
+    // reload mid-set → same screen, same cursor
+    const cur0 = JSON.stringify(aw().cursor);
+    await loadApp();
+    log('set: mode+cursor survive reload', aw().mode === 'set' && JSON.stringify(aw().cursor) === cur0);
+
+    // ── DONE SET → rest → skip → set 2 ──
+    q('[data-act="done-set"]').click();                            // TAP 3 — first set logged
+    await sleep(400);
     const st1 = state();
-    const sets = st1.sessions[0]?.entries[0]?.sets || [];
-    log('3-tap: first set logged', sets.length === 1, JSON.stringify(sets[0] || null));
-    log('3-tap: activeWorkout row marked done', st1.activeWorkout?.exercises[0]?.rows[0]?.done === true);
-    log('rest pill counting down', q('#rest-pill').classList.contains('show') && /\d:\d\d/.test(q('#rest-time').textContent));
-    log('row visually done', q('.tr.done') !== null);
+    log('3-tap prime directive: first set logged', st1.sessions[0]?.entries[0]?.sets.length === 1, JSON.stringify(st1.sessions[0]?.entries[0]?.sets[0] || null));
+    log('rest: full-screen countdown', aw().mode === 'rest' && !!q('#rest-big'));
+    log('rest: UP NEXT card', !!q('.upnext-card') && /SET 2\//.test(q('.upnext-card .d')?.textContent || ''));
+    q('[data-act="rest-skip"]').click();
+    await sleep(300);
+    log('rest SKIP → next set screen', aw().mode === 'set' && /SET 2\//.test(q('.set-progress .sp')?.textContent || ''));
 
-    // 3. edit an unchecked row's weight, then reload → persistence
-    const w2 = q('.tr:not(.done) input[data-fld="w"]');
-    if (w2) { const Ev = W().Event; w2.value = '199'; w2.dispatchEvent(new Ev('change', { bubbles: true })); }
-    await sleep(200);
-    f.src = 'index.html';                              // simulated reload
-    await new Promise(r => f.onload = r);
-    await sleep(600);
-    log('reload: workout view restored', D().body.dataset.view === 'workout');
-    log('reload: done row survived', !!q('.tr.done'));
-    const w2b = q('.tr:not(.done) input[data-fld="w"]');
-    log('reload: edited unchecked weight survived', !!w2b && w2b.value === '199', w2b && w2b.value);
-
-    // 4. finish → summary → home; history shows the session
-    W().confirm = () => true;                          // auto-accept "discard unchecked"
-    q('[data-act="finish-workout"]').click();
+    // ── skip set → rest → skip → set 3 → DONE SET (last) → summary ──
+    q('[data-act="skip-set"]').click();
+    await sleep(300);
+    log('skip set: row marked skipped, no log', aw().exercises[0].rows[1].skipped === true && state().sessions[0].entries[0].sets.length === 1);
+    log('skip set → rest screen', aw().mode === 'rest');
+    q('[data-act="rest-skip"]').click();
+    await sleep(300);
+    log('set 3 reached', /SET 3\//.test(q('.set-progress .sp')?.textContent || ''));
+    W().confirm = () => true;
+    q('[data-act="done-set"]').click();                            // last undone row → finish
     await sleep(500);
-    log('summary renders', D().body.dataset.view === 'summary' && !!q('.sum-hero'));
+    log('last set → summary', D().body.dataset.view === 'summary' && !!q('.sum-hero'));
     const st2 = state();
-    log('finish: activeWorkout cleared + endedAt set', st2.activeWorkout === null && !!st2.sessions[0].endedAt);
+    log('finish: 2 logged sets (skipped excluded), endedAt set', st2.sessions[0].entries[0].sets.length === 2 && !!st2.sessions[0].endedAt && st2.activeWorkout === null);
     q('[data-act="goto-home"]').click();
     await sleep(300);
-    log('back home, feed shows workout', D().body.dataset.view === 'home' && !!q('[data-act="open-session"]'));
-    q('#bottom-tabs') /* exists */;
-    W().nav('history');
-    await sleep(300);
-    log('history lists the session', !!q('[data-act="open-session"]'));
-    W().nav('exercises');
-    await sleep(300);
-    const exRow = q('[data-act="open-exercise"]');
-    log('exercises screen lists movements', !!exRow);
-    exRow.click();
-    await sleep(400);
-    log('exercise detail: records + chart canvas', !!q('.rec-grid') && !!q('#cv-e1rm'));
+    log('home feed shows the workout', D().body.dataset.view === 'home' && !!q('[data-act="open-session"]'));
 
-    // 4b. player navigation: add a 2nd exercise, NEXT/PREV, focus reload-persistence, iframe when url set
-    W().nav('home');
-    await sleep(250);
-    q('[data-act="start-workout"]').click();   // resume-less: creates fresh (prev finished) → folds done rows
-    await sleep(350);
-    if (D().body.dataset.view !== 'workout') { log('player nav: could not reopen workout', false); }
-    q('[data-act="add-exercise"]').click();
+    // ── edit round-trip (new workout, resumed same day) ──
+    q('[data-act="start-workout"]').click();
+    await sleep(400);
+    log('restart same day: brief again, done rows folded', aw().mode === 'brief' && aw().exercises[0].rows.filter(r => r.done).length === 2);
+    q('[data-act="edit-session"]').click();
     await sleep(300);
-    const rows2 = D().querySelectorAll('#picker-list [data-act="pick-exercise"]');
-    rows2[1].click();   // add a different exercise
-    await sleep(350);
-    const stA = state();
-    log('player: overview chips match exercises', D().querySelectorAll('.ov-strip [data-act="jump-ex"]').length === stA.activeWorkout.exercises.length, D().querySelectorAll('.ov-strip [data-act="jump-ex"]').length + ' chips');
-    log('player: one exercise table at a time', D().querySelectorAll('.px-name').length === 1);
-    const nameBefore = q('.px-name').textContent;
-    q('[data-act="prev-ex"]') && q('[data-act="prev-ex"]').click();
+    log('edit mode: table player renders', aw().mode === 'edit' && !!q('.ov-strip') && !!q('.player-nav'));
+    q('[data-act="resume-runner"]').click();
     await sleep(300);
-    log('player: PREV moves focus', q('.px-name').textContent !== nameBefore, `${nameBefore} -> ${q('.px-name').textContent}`);
-    const focusVal = state().activeWorkout.focus;
-    f.src = 'index.html';
-    await new Promise(r => f.onload = r);
-    await sleep(600);
-    log('player: focus survives reload', state().activeWorkout.focus === focusVal && D().body.dataset.view === 'workout', 'focus=' + state().activeWorkout.focus);
-    // inject a videoUrl on the focused exercise → media panel becomes an embed
-    const fx = state().activeWorkout.exercises[state().activeWorkout.focus].exerciseId;
-    W().eval(`exById('${fx}').videoUrl='https://www.youtube.com/watch?v=dQw4w9WgXcQ'; renderView();`);
-    await sleep(250);
-    log('player: iframe embed when videoUrl set', !!q('.media-panel iframe'));
-    W().eval(`exById('${fx}').videoUrl=null;`);
+    log('resume runner from edit', ['set', 'edit'].includes(aw().mode), 'mode=' + aw().mode);   // 'edit' only if zero undone rows
     W().confirm = () => true;
     q('[data-act="cancel-workout"]').click();
     await sleep(300);
-    log('player: cancel returns home', D().body.dataset.view === 'home');
+    log('cancel returns home (logged sets kept)', D().body.dataset.view === 'home' && state().sessions[0].entries[0].sets.length === 2);
 
-    // 5. plan lifecycle (inject a plan directly, then start a day)
+    // ── coach chips ──
+    W().nav('coach');
+    await sleep(300);
+    log('coach: chips render', D().querySelectorAll('#coach-chips [data-chip]').length === 4);
+    log('coach: dock fixed input present', !!q('#coach-dock #coach-text'));
+    q('#coach-chips [data-chip="0"]').click();
+    await sleep(200);
+    log('coach: chip stuffs a real prompt (send blocked w/o key)', (q('#coach-text').value || '').toLowerCase().includes('program'));
+
+    // ── plan lifecycle through the runner ──
     W().acceptPlan({ type: 'plan', name: 'TEST UL', days: [
       { name: 'UPPER', exercises: [{ name: 'Bench Press', sets: 2, reps: 5, startWeight: 100, videoQuery: 'bench' }] },
       { name: 'LOWER', exercises: [{ name: 'Squat', sets: 2, reps: 5, videoQuery: 'squat' }] },
@@ -136,15 +134,26 @@ function state() { return JSON.parse(W().localStorage.getItem('cuaderno.v1')); }
     log('plan accepted: card on home', !!q('.plan-card'));
     q('[data-act="start-workout"]').click();
     await sleep(400);
-    const inputs = D().querySelectorAll('.set-table input[data-fld="w"]');
-    // earlier same-day work folds in as done rows, so expect AT LEAST the 2 plan rows, first ones @100
-    log('plan day: rows from targets', D().body.dataset.view === 'workout' && inputs.length >= 2 && inputs[0].value === '100' && inputs[1].value === '100', inputs.length + ' rows');
-    D().querySelectorAll('[data-act="check-row"]').forEach(b => b.click());
-    await sleep(300);
-    q('[data-act="finish-workout"]').click();
-    await sleep(400);
-    const st3 = state();
-    log('plan cursor advanced after finish', st3.plan.cursor === 1, 'cursor=' + st3.plan.cursor);
+    log('plan day: brief shows plan context', aw().mode === 'brief' && /UPPER/.test(q('.brief-sub')?.textContent || ''));
+    q('[data-act="lets-go"]').click();
+    await sleep(4800);                                             // 3-2-1-GO
+    log('plan day: set screen @ target weight', aw().mode === 'set' && q('.set-table input[data-fld="w"]')?.value === '100');
+    q('[data-act="done-set"]').click(); await sleep(300);
+    q('[data-act="rest-skip"]')?.click(); await sleep(300);
+    q('[data-act="done-set"]').click(); await sleep(500);
+    log('plan day: finished via runner → summary', D().body.dataset.view === 'summary');
+    log('plan cursor advanced', state().plan.cursor === 1, 'cursor=' + state().plan.cursor);
+    q('[data-act="goto-home"]').click(); await sleep(300);
+
+    // ── other screens intact ──
+    W().nav('history'); await sleep(300);
+    log('history lists sessions', D().querySelectorAll('[data-act="open-session"]').length >= 1);
+    W().nav('exercises'); await sleep(300);
+    const exRow = q('[data-act="open-exercise"]');
+    log('exercises screen lists movements (with thumbs)', !!exRow && !!q('img.thumb'));
+    exRow.click(); await sleep(400);
+    log('exercise detail: records + chart', !!q('.rec-grid') && !!q('#cv-e1rm'));
+
     log('ALL DONE', true);
   } catch (e) {
     log('EXCEPTION', false, e.message + ' @ ' + (e.stack || '').split('\n')[1]);
