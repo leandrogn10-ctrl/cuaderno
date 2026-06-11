@@ -134,8 +134,10 @@ async function loadApp() {
     W().nav('coach');
     await sleep(300);
     log('coach: full-screen overlay with inner scroller', !!q('.coach-wrap') && getComputedStyle(q('.coach-wrap')).position === 'fixed');
+    log('coach: bottom tabs STAY visible (exit path)', getComputedStyle(q('#bottom-tabs')).display !== 'none');
     log('coach: chips render', D().querySelectorAll('#coach-chips [data-chip]').length === 4);
     log('coach: dock input present', !!q('#coach-dock #coach-text'));
+    log('offline: prefetch fn + settings button wired', typeof W().offlinePrefetch === 'function' && !!D().getElementById('offline-prep-btn'));
     q('#coach-chips [data-chip="0"]').click();
     await sleep(200);
     log('coach: chip stuffs a real prompt (send blocked w/o key)', (q('#coach-text').value || '').toLowerCase().includes('program'));

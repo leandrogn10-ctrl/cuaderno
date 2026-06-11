@@ -321,8 +321,10 @@ body[data-view="workout"] .content { padding: 0; }
 /* ── coach: fixed full-screen overlay with an INNER scroller — the page itself never scrolls,
    so the iOS keyboard can't shove the screen around. Height tracked via visualViewport. ── */
 body[data-view="coach"] { overflow: hidden; }
-body[data-view="coach"] .bottom-tabs, body[data-view="coach"] .fab { display: none !important; }
+body[data-view="coach"] .fab { display: none !important; }
 .coach-wrap { position: fixed; inset: 0; z-index: 600; display: flex; flex-direction: column; background: var(--bg); padding-top: env(safe-area-inset-top); }
+@media (max-width: 880px) { .coach-wrap { bottom: calc(58px + env(safe-area-inset-bottom)); } }   /* tabs stay tappable below the overlay */
+.coach-input textarea { height: 48px; max-height: 120px; font-size: 16px; }
 .coach-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px 8px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .coach-head h2 { font-size: 28px; line-height: 0.9; }
 .coach-msgs { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
@@ -635,6 +637,11 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
             <input type="number" id="rest-default" min="15" step="15" style="width:74px;background:var(--bg);border:1px solid var(--line);padding:7px 9px;color:var(--ink);text-align:center"> s
           </label>
         </div>
+      </div>
+      <div class="settings-section">
+        <h3>Offline</h3>
+        <div class="desc">Demo images cache automatically; this re-packs the whole bag (your library + plan) so airplane-mode gym sessions have every animation. Coach and YouTube need signal — everything else works offline.</div>
+        <button class="btn-secondary" id="offline-prep-btn">⬇ PREPARE OFFLINE</button>
       </div>
       <div class="settings-section">
         <h3>Theme</h3>
@@ -1049,18 +1056,38 @@ async function exdbFetch() {
   EXDB_FETCHING = true;
   try {
     const res = await fetch(EXDB_INDEX_URL);
-    if (res.ok) { EXDB_INDEX = await res.json(); renderView(); }
+    if (res.ok) {
+      EXDB_INDEX = await res.json();
+      renderView();
+      setTimeout(() => offlinePrefetch(true), 2500);   // index just arrived → quietly pack the offline bag
+    }
   } catch (e) { console.warn('exdb fetch failed', e); }
   EXDB_FETCHING = false;
 }
-/* media resolver chain: user video → exdb animation → null (monogram tile) */
+/* media resolver chain: user video → exdb animation → null (monogram tile).
+   Offline, prefer the cached exdb animation — an embed can't play without network. */
 function resolveMedia(ex) {
   if (!ex) return null;
+  const hit = exdbResolve(ex);
+  if (!navigator.onLine && hit) return { type: 'imgs', imgs: hit.imgs, instructions: hit.instructions };
   const id = ytId(ex.videoUrl);
   if (id) return { type: 'yt', id };
-  const hit = exdbResolve(ex);
   if (hit) return { type: 'imgs', imgs: hit.imgs, instructions: hit.instructions };
   return null;
+}
+/* "gym bag" prefetch: pull both demo frames for the library + active plan into the SW media cache */
+async function offlinePrefetch(silent = false) {
+  const urls = new Set();
+  const wanted = [...state.exercises.filter(e => !e.archived)];
+  for (const day of state.plan?.days || []) for (const t of day.exercises) { const ex = exById(t.exerciseId); if (ex) wanted.push(ex); }
+  for (const ex of wanted) {
+    const hit = exdbResolve(ex);
+    if (hit) hit.imgs.forEach(u => urls.add(u));
+  }
+  let ok = 0;
+  await Promise.allSettled([...urls].map(u => fetch(u).then(r => { if (r.ok || r.type === 'opaque') ok++; })));
+  if (!silent) toast(`offline bag packed — ${ok}/${urls.size} images cached.`);
+  return ok;
 }
 /* thumbnails: yt thumb → exdb frame 0 → volt monogram */
 function thumbFor(ex, sm = false) {
@@ -1884,7 +1911,7 @@ function renderCoachScreen() {
     <div class="coach-dock" id="coach-dock">
       <div class="coach-chips" id="coach-chips">${COACH_CHIPS.map((c, i) => `<button data-chip="${i}">${c[0]}</button>`).join('')}</div>
       <div class="coach-input" style="padding:0;border:none">
-        <textarea id="coach-text" placeholder="or type anything…"></textarea>
+        <textarea id="coach-text" placeholder="ask coach…"></textarea>
         <button class="btn-primary chamfer" id="coach-send">SEND</button>
       </div>
     </div>
@@ -1892,7 +1919,9 @@ function renderCoachScreen() {
   if (!COACH.msgs.length) COACH.msgs.push({ role: 'ai', text: 'I can read your log. Tap a chip below — or ask anything: programs, deloads, swaps, plateaus.' });
   renderCoach();
   document.getElementById('coach-send').addEventListener('click', coachSend);
-  document.getElementById('coach-text').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); coachSend(); } });
+  const cta = document.getElementById('coach-text');
+  cta.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); coachSend(); } });
+  cta.addEventListener('input', () => { cta.style.height = 'auto'; cta.style.height = Math.min(120, cta.scrollHeight) + 'px'; });
   document.getElementById('coach-chips').addEventListener('click', e => {
     const b = e.target.closest('[data-chip]'); if (!b) return;
     document.getElementById('coach-text').value = COACH_CHIPS[+b.dataset.chip][1];
@@ -1910,7 +1939,7 @@ function bindVisualViewport() {
     const wrap = document.getElementById('coach-wrap');
     if (!wrap) return;
     const off = Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop);
-    wrap.style.bottom = off ? off + 'px' : '0';
+    wrap.style.bottom = off > 10 ? off + 'px' : '';   // keyboard open → ride above it; closed → CSS base (tabs visible)
     const msgs = document.getElementById('coach-msgs');
     if (msgs) msgs.scrollTop = msgs.scrollHeight;
   };
@@ -1958,6 +1987,7 @@ function acceptPlan(p) {
   save();
   toast('plan accepted — ' + days.length + ' days. Hit START WORKOUT.');
   nav('home');
+  setTimeout(() => offlinePrefetch(true), 1500);   // new plan → cache its demo frames for the gym basement
 }
 async function coachSend() {
   const ta = document.getElementById('coach-text');
@@ -2495,6 +2525,11 @@ document.getElementById('bottom-tabs').addEventListener('click', e => {
 document.getElementById('fab-primary').addEventListener('click', startWorkout);
 
 /* ═══ boot ═══ */
+document.getElementById('offline-prep-btn').addEventListener('click', () => { toast('packing…'); offlinePrefetch(); });
+/* reconnect: flush queued sync the moment signal returns; reflect offline in the pip */
+window.addEventListener('online', () => { renderSyncPip(); scheduleSyncPush(); syncPull(); });
+window.addEventListener('offline', () => setSyncPipState(null));
+
 applyTheme(state.settings.theme);
 (function boot() {
   const aw = state.activeWorkout;
