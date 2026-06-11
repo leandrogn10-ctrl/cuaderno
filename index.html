@@ -318,14 +318,20 @@ body[data-view="workout"] .content { padding: 0; }
 .upnext-card .uc .n { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; text-transform: uppercase; font-size: 19px; line-height: 1; display: block; }
 .upnext-card .uc .d { font-size: 11px; color: var(--ink-dim); }
 
-/* ── coach dock (fixed input + chips; killed the keyboard void) ── */
-.coach-msgs { display: flex; flex-direction: column; gap: 10px; padding-bottom: 168px; }
-.coach-dock { position: fixed; left: 0; right: 0; bottom: 0; z-index: 700; background: var(--bg-elev); border-top: 1px solid var(--line); padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); will-change: transform; }
+/* ── coach: fixed full-screen overlay with an INNER scroller — the page itself never scrolls,
+   so the iOS keyboard can't shove the screen around. Height tracked via visualViewport. ── */
+body[data-view="coach"] { overflow: hidden; }
+body[data-view="coach"] .bottom-tabs, body[data-view="coach"] .fab { display: none !important; }
+.coach-wrap { position: fixed; inset: 0; z-index: 600; display: flex; flex-direction: column; background: var(--bg); padding-top: env(safe-area-inset-top); }
+.coach-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px 8px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.coach-head h2 { font-size: 28px; line-height: 0.9; }
+.coach-msgs { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+.coach-dock { flex-shrink: 0; background: var(--bg-elev); border-top: 1px solid var(--line); padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); }
 .coach-chips { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 8px; scrollbar-width: none; }
 .coach-chips::-webkit-scrollbar { display: none; }
 .coach-chips button { flex-shrink: 0; font-family: 'Big Shoulders Display', sans-serif; font-weight: 700; text-transform: uppercase; font-size: 14px; letter-spacing: 0.05em; color: var(--accent); border: 1px solid var(--c-sage-bd); background: color-mix(in srgb, var(--accent) 6%, transparent); padding: 8px 14px; }
 .coach-chips button:active { background: color-mix(in srgb, var(--accent) 16%, transparent); }
-@media (max-width: 880px) { .coach-dock { bottom: calc(58px + env(safe-area-inset-bottom)); padding-bottom: 10px; } .coach-msgs { padding-bottom: 190px; } }
+.db-mic.rec { color: var(--danger); border-color: var(--danger); animation: pulse 1.2s infinite; }
 
 /* rest countdown pill */
 .rest-pill { position: fixed; left: 50%; transform: translateX(-50%); bottom: 22px; z-index: 950; display: none; align-items: center; gap: 10px; background: var(--bg-elev); border: 1px solid var(--c-dusty-bd); color: var(--cool); padding: 9px 14px; font-size: 15px; cursor: default; box-shadow: var(--shadow); overflow: hidden; }
@@ -588,6 +594,22 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
       </div>
     </div>
     <footer><span></span><button class="btn-primary chamfer" id="cd-save">LOG CARDIO</button></footer>
+  </div>
+</dialog>
+
+<!-- ── post-workout debrief ── -->
+<dialog id="debrief-modal">
+  <div class="modal">
+    <header><div><h2>Debrief</h2><p id="db-sub">how did it go?</p></div><button type="button" class="close" data-close="debrief">×</button></header>
+    <div class="modal-body">
+      <textarea id="db-text" style="width:100%;min-height:140px;background:var(--paper);border:1px solid var(--line);padding:11px 13px;font-size:16px;line-height:1.5;color:var(--ink);resize:vertical" placeholder="talk or type — energy, soreness, pain, sleep, what felt heavy, life stuff…"></textarea>
+      <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn-secondary db-mic" id="db-mic" hidden>● record</button>
+        <span style="font-size:10px;color:var(--ink-faint);letter-spacing:0.06em">tip: the 🎙 on your keyboard dictates straight into the box</span>
+      </div>
+      <div id="db-reply" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
+    </div>
+    <footer><span style="font-size:10px;color:var(--ink-faint)">saved to this session — coach reads these</span><button class="btn-primary chamfer" id="db-send">SEND</button></footer>
   </div>
 </dialog>
 
@@ -899,14 +921,27 @@ function weekDots() {
   return h;
 }
 function isoWeek(dstr) { const d = new Date(dstr + 'T12:00:00'); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day + 3); const w1 = new Date(d.getFullYear(), 0, 4); return d.getFullYear() + '-W' + String(1 + Math.round(((d - w1) / 86400000 - 3 + ((w1.getDay() + 6) % 7)) / 7)).padStart(2, '0'); }
+/* streak follows the PLAN: a week counts when you trained plan.days.length distinct days (1/wk without a plan) */
+function weekGoal() { return Math.min(7, state.plan?.days?.length || 1); }
+function weekTrainDays() {   // iso week -> Set of distinct training dates
+  const m = {};
+  for (const s of state.sessions) {
+    if (sessionSets(s) === 0) continue;
+    const wk = isoWeek(s.date);
+    (m[wk] = m[wk] || new Set()).add(s.date);
+  }
+  return m;
+}
 function weekStreak() {
-  const weeks = new Set(state.sessions.filter(s => sessionSets(s) > 0).map(s => isoWeek(s.date)));
+  const goal = weekGoal();
+  const m = weekTrainDays();
   let streak = 0;
   const d = new Date(); d.setHours(12, 0, 0, 0);
+  // current week counts if the goal is already met; an in-progress week never breaks the run
+  if ((m[isoWeek(d.toISOString().slice(0, 10))]?.size || 0) >= goal) streak++;
   for (;;) {
-    const wk = isoWeek(d.toISOString().slice(0, 10));
-    if (weeks.has(wk)) { streak++; d.setDate(d.getDate() - 7); }
-    else if (streak === 0 && wk === isoWeek(today())) { d.setDate(d.getDate() - 7); if (!weeks.has(isoWeek(d.toISOString().slice(0, 10)))) break; } // current week not yet trained doesn't break a run
+    d.setDate(d.getDate() - 7);
+    if ((m[isoWeek(d.toISOString().slice(0, 10))]?.size || 0) >= goal) streak++;
     else break;
     if (streak > 520) break;
   }
@@ -919,9 +954,13 @@ function renderHome() {
   const aw = state.activeWorkout;
   let html = `<div class="day-head"><h2>${dayName}<span style="color:var(--accent)">.</span></h2><span class="sub">${dateStr}</span></div>`;
   html += `<button class="big-add chamfer" data-act="start-workout">${aw ? '▶ RESUME WORKOUT' : 'START WORKOUT'}</button>`;
+  const undebriefed = latestDebriefable();
+  if (undebriefed && !aw) html += `<button class="big-add ghost chamfer" data-act="debrief-session" data-id="${undebriefed.id}" style="font-size:18px;padding:12px;margin-top:0">🎙 DEBRIEF ${undebriefed.date === today() ? "TODAY'S" : 'LAST'} SESSION</button>`;
   html += renderPlanCard();
   const streak = weekStreak();
-  html += `<div class="week-strip"><div class="dots">${weekDots()}</div><div class="streak"><div class="n">${streak}</div><div class="l">week streak</div></div></div>`;
+  const goal = weekGoal();
+  const thisWk = weekTrainDays()[isoWeek(today())]?.size || 0;
+  html += `<div class="week-strip"><div class="dots">${weekDots()}</div><div class="streak"><div class="n">${streak}</div><div class="l">wk streak · ${thisWk}/${goal}</div></div></div>`;
   const recent = sessionsDesc().filter(s => sessionSets(s) > 0).slice(0, 3);
   if (recent.length) {
     html += `<div class="sec-label"><span>RECENT</span><button data-act="goto-history">ALL →</button></div>`;
@@ -1482,7 +1521,8 @@ function renderSummary(sessionId) {
       prSets.map(p => `<span class="set-chip pr">${escapeHtml(p.ex?.name || '?')} ${fmtN(dispW(p.x.w))}×${p.x.r}</span>`).join('') + `</div></div>`;
   }
   if (planDay) html += `<div class="sec-label"><span>NEXT UP: ${escapeHtml(state.plan.days[state.plan.cursor % state.plan.days.length].name)}</span></div>`;
-  html += `<button class="big-add chamfer" data-act="goto-home" style="margin-top:18px">DONE →</button>`;
+  html += `<button class="big-add ghost chamfer" data-act="debrief-session" data-id="${s.id}" style="margin-top:18px;font-size:20px;padding:13px">🎙 DEBRIEF — HOW DID IT GO?</button>`;
+  html += `<button class="big-add chamfer" data-act="goto-home" style="margin-top:4px">DONE →</button>`;
   viewRoot.innerHTML = html;
   confettiBurst(prSets.length > 0);
 }
@@ -1811,6 +1851,11 @@ function coachContext() {
   }
   const bw = [...state.bodyweight].sort((a, b) => a.date.localeCompare(b.date)).slice(-5);
   if (bw.length) lines.push('', 'Bodyweight: ' + bw.map(b => `${b.date.slice(5)}:${fmtN(dispW(b.w))}`).join(' '));
+  const debs = sessionsDesc().filter(s => s.debrief?.text).slice(0, 3);
+  if (debs.length) {
+    lines.push('', 'Post-workout debriefs (his own words — weigh these heavily for recovery/pain/motivation):');
+    for (const s of debs) lines.push(`- ${s.date}: ${s.debrief.text.slice(0, 280)}`);
+  }
   return lines.join('\n');
 }
 function appBuildClaudeSystem() {
@@ -1833,13 +1878,15 @@ const COACH_CHIPS = [
   ['WHY AM I STALLING?', 'Look at my recent numbers and e1RM trends — where am I stalling and what specifically should I change?'],
 ];
 function renderCoachScreen() {
-  viewRoot.innerHTML = `<div class="screen-head"><h2>COACH<span style="color:var(--accent)">.</span></h2><span class="sub">sees your log, e1RMs, bodyweight</span></div>
-  <div class="coach-msgs" id="coach-msgs"></div>
-  <div class="coach-dock" id="coach-dock">
-    <div class="coach-chips" id="coach-chips">${COACH_CHIPS.map((c, i) => `<button data-chip="${i}">${c[0]}</button>`).join('')}</div>
-    <div class="coach-input" style="padding:0;border:none">
-      <textarea id="coach-text" placeholder="or type anything…"></textarea>
-      <button class="btn-primary chamfer" id="coach-send">SEND</button>
+  viewRoot.innerHTML = `<div class="coach-wrap" id="coach-wrap">
+    <div class="coach-head"><h2>COACH<span style="color:var(--accent)">.</span></h2><button class="wk-cancel" data-act="goto-home" title="close">✕</button></div>
+    <div class="coach-msgs" id="coach-msgs"></div>
+    <div class="coach-dock" id="coach-dock">
+      <div class="coach-chips" id="coach-chips">${COACH_CHIPS.map((c, i) => `<button data-chip="${i}">${c[0]}</button>`).join('')}</div>
+      <div class="coach-input" style="padding:0;border:none">
+        <textarea id="coach-text" placeholder="or type anything…"></textarea>
+        <button class="btn-primary chamfer" id="coach-send">SEND</button>
+      </div>
     </div>
   </div>`;
   if (!COACH.msgs.length) COACH.msgs.push({ role: 'ai', text: 'I can read your log. Tap a chip below — or ask anything: programs, deloads, swaps, plateaus.' });
@@ -1854,18 +1901,18 @@ function renderCoachScreen() {
   bindVisualViewport();
 }
 VIEWS.coach = renderCoachScreen;
-/* iOS keyboard: keep the dock above the keyboard and the chat pinned to bottom */
+/* iOS keyboard: the overlay shrinks to the visual viewport — page never scrolls, no screen jump */
 let _vvBound = false;
 function bindVisualViewport() {
   if (_vvBound || !window.visualViewport) return;
   _vvBound = true;
   const adjust = () => {
-    const dock = document.getElementById('coach-dock');
-    if (!dock) return;
+    const wrap = document.getElementById('coach-wrap');
+    if (!wrap) return;
     const off = Math.max(0, window.innerHeight - visualViewport.height - visualViewport.offsetTop);
-    dock.style.transform = off ? `translateY(-${off}px)` : '';
+    wrap.style.bottom = off ? off + 'px' : '0';
     const msgs = document.getElementById('coach-msgs');
-    if (msgs) window.scrollTo(0, document.body.scrollHeight);
+    if (msgs) msgs.scrollTop = msgs.scrollHeight;
   };
   visualViewport.addEventListener('resize', adjust);
   visualViewport.addEventListener('scroll', adjust);
@@ -1880,7 +1927,7 @@ function renderCoach() {
     return `<div class="msg ${m.role === 'user' ? 'me' : 'ai'}${m.thinking ? ' thinking' : ''}">${escapeHtml(m.text)}</div>`;
   }).join('');
   root.querySelectorAll('[data-accept]').forEach(b => b.addEventListener('click', () => acceptPlan(COACH.msgs[+b.dataset.accept].plan)));
-  window.scrollTo(0, document.body.scrollHeight);   // chat pins to bottom (page is the scroller; dock is fixed)
+  root.scrollTop = root.scrollHeight;   // the messages container is the scroller (overlay layout)
 }
 function extractPlan(text) {
   const m = text.match(/```json\s*([\s\S]*?)```/);
@@ -2018,6 +2065,93 @@ document.getElementById('cd-save').addEventListener('click', () => {
   cardioModal.close(); renderView(); toast('cardio logged.');
 });
 
+/* ═══ post-workout debrief: speak (dictation / Web Speech) → Claude extracts the signal ═══ */
+const debriefModal = document.getElementById('debrief-modal');
+const DB_CTX = { sessionId: null, rec: null };
+function latestDebriefable() {   // most recent finished session (<48h) without a debrief
+  const cutoff = Date.now() - 48 * 3600 * 1000;
+  return sessionsDesc().find(s => sessionSets(s) > 0 && s.endedAt && s.endedAt > cutoff && !s.debrief) || null;
+}
+function openDebrief(sessionId) {
+  const s = sessionById(sessionId); if (!s) return;
+  DB_CTX.sessionId = sessionId;
+  document.getElementById('db-sub').textContent = s.date + ' — how did it go?';
+  document.getElementById('db-text').value = s.debrief?.text || '';
+  document.getElementById('db-reply').innerHTML = s.debrief?.reply ? `<div class="msg ai">${escapeHtml(s.debrief.reply)}</div>` : '';
+  setupDebriefMic();
+  debriefModal.showModal();
+}
+function setupDebriefMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const btn = document.getElementById('db-mic');
+  if (!SR) { btn.hidden = true; return; }
+  btn.hidden = false;
+  btn.onclick = () => {
+    if (DB_CTX.rec) { DB_CTX.rec.stop(); return; }
+    const rec = new SR();
+    rec.lang = navigator.language || 'en-US';
+    rec.continuous = true; rec.interimResults = false;
+    rec.onresult = e => {
+      const ta = document.getElementById('db-text');
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) ta.value = (ta.value + ' ' + e.results[i][0].transcript).trim();
+      }
+    };
+    rec.onend = () => { DB_CTX.rec = null; btn.classList.remove('rec'); btn.textContent = '● record'; };
+    rec.onerror = rec.onend;
+    DB_CTX.rec = rec; btn.classList.add('rec'); btn.textContent = '■ stop';
+    try { rec.start(); } catch (e) { rec.onend(); }
+  };
+}
+function sessionRecap(s) {
+  return s.entries.map(en => {
+    const ex = exById(en.exerciseId);
+    return `${ex?.name || '?'} ${en.sets.map(x => `${fmtN(dispW(x.w))}×${x.r}${x.rpe ? '@' + x.rpe : ''}${x.pr ? '(PR)' : ''}`).join(' ')}`;
+  }).join(' | ');
+}
+async function sendDebrief() {
+  const s = sessionById(DB_CTX.sessionId); if (!s) return;
+  const text = document.getElementById('db-text').value.trim();
+  if (!text) { toast('say something first.', true); return; }
+  if (DB_CTX.rec) DB_CTX.rec.stop();
+  s.debrief = { ts: Date.now(), text, reply: s.debrief?.reply || null };
+  save();   // the data point is saved no matter what — coach analysis is the bonus layer
+  const replyBox = document.getElementById('db-reply');
+  if (!isClaudeEnabled()) {
+    debriefModal.close(); renderView();
+    toast('debrief saved. (add your API key for coach analysis)');
+    return;
+  }
+  replyBox.innerHTML = '<div class="msg ai thinking">reading your debrief…</div>';
+  try {
+    const msg = [
+      `Post-workout debrief for ${s.date}.`,
+      `Session: ${sessionRecap(s) || '(no sets)'}.`,
+      '',
+      `My debrief (spoken, transcribed): ${text}`,
+      '',
+      'Do three things: 1) extract the key data points in one compact line (energy, soreness, pain, sleep, stress, per-exercise feedback); 2) react in 2–3 sentences; 3) ONLY if this clearly warrants adjusting my current plan, propose the adjusted plan as the usual json block — otherwise no block.',
+    ].join('\n');
+    const out = await callClaudeChat([{ role: 'user', content: msg }], 1100);
+    const { text: shown, plan } = extractPlan(out);
+    s.debrief.reply = shown || '(noted)';
+    save();
+    replyBox.innerHTML = `<div class="msg ai">${escapeHtml(s.debrief.reply)}</div>`;
+    if (plan) {
+      const card = document.createElement('div');
+      card.className = 'plan-accept chamfer';
+      card.innerHTML = `<h4>${escapeHtml(plan.name || 'ADJUSTED PLAN')}</h4>${plan.days.map(d => `<div class="pa-day"><strong>${escapeHtml(d.name)}</strong> — ${(d.exercises || []).map(e => `${escapeHtml(e.name)} ${e.sets}×${e.reps}`).join(', ')}</div>`).join('')}<div style="margin-top:10px"><button class="btn-primary chamfer" id="db-accept">ACCEPT ADJUSTED PLAN</button></div>`;
+      replyBox.appendChild(card);
+      document.getElementById('db-accept').addEventListener('click', () => { debriefModal.close(); acceptPlan(plan); });
+    }
+    renderView();
+  } catch (e) {
+    replyBox.innerHTML = `<div class="msg ai">couldn't reach coach (${escapeHtml(e.message)}) — debrief saved anyway.</div>`;
+  }
+}
+document.getElementById('db-send').addEventListener('click', sendDebrief);
+debriefModal.addEventListener('close', () => { if (DB_CTX.rec) DB_CTX.rec.stop(); });
+
 /* ═══ delegated actions (robust across rerenders) ═══ */
 viewRoot.addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
@@ -2036,6 +2170,7 @@ viewRoot.addEventListener('click', e => {
   else if (act === 'rest-bump') { bumpRest(+el.dataset.d); }
   else if (act === 'brief-swap') { PICKER_CTX = { type: 'swap', xi: +el.dataset.xi }; openPicker(); }
   else if (act === 'toggle-form') { const fs = document.getElementById('form-steps'); if (fs) fs.hidden = !fs.hidden; }
+  else if (act === 'debrief-session') openDebrief(id);
   else if (act === 'check-row') checkRow(+el.dataset.xi, +el.dataset.ri);
   else if (act === 'add-set') addSet(+el.dataset.xi);
   else if (act === 'add-exercise') openPicker();
@@ -2313,7 +2448,7 @@ document.getElementById('import-file').addEventListener('change', async e => {
 });
 
 /* ═══ modal helpers (shell) ═══ */
-const ALL_DIALOGS = { picker: pickerModal, cardio: cardioModal, video: videoModal, settings: settingsModal, prompt: promptModal };
+const ALL_DIALOGS = { picker: pickerModal, cardio: cardioModal, video: videoModal, settings: settingsModal, prompt: promptModal, debrief: debriefModal };
 Object.values(ALL_DIALOGS).forEach(d => {
   d.addEventListener('click', e => {
     if (e.target === d) {

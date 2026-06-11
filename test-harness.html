@@ -60,7 +60,7 @@ async function loadApp() {
     // reload mid-count → countStartedAt resumes/advances correctly
     await loadApp();
     log('count: mode survives reload', D().body.dataset.view === 'workout' && ['count', 'set'].includes(aw().mode));
-    await sleep(4600);                                             // let 3-2-1-GO elapse (virtual time)
+    await sleep(4600); W().wkTick(); await sleep(200);             // let 3-2-1-GO elapse (manual tick: see plan-day note)
     log('count → set: auto-advanced', aw().mode === 'set' && !!q('.done-set-btn'));
     log('set: media animation (exdb) present', !!q('#media-flip'));
     log('set: ⓘ form steps available', !!q('[data-act="toggle-form"]'));
@@ -97,9 +97,23 @@ async function loadApp() {
     log('last set → summary', D().body.dataset.view === 'summary' && !!q('.sum-hero'));
     const st2 = state();
     log('finish: 2 logged sets (skipped excluded), endedAt set', st2.sessions[0].entries[0].sets.length === 2 && !!st2.sessions[0].endedAt && st2.activeWorkout === null);
+    log('summary: debrief button offered', !!q('[data-act="debrief-session"]'));
     q('[data-act="goto-home"]').click();
     await sleep(300);
     log('home feed shows the workout', D().body.dataset.view === 'home' && !!q('[data-act="open-session"]'));
+    log('home: streak strip shows n/goal', /\d+\/\d+/.test(q('.week-strip .l')?.textContent || ''), q('.week-strip .l')?.textContent);
+
+    // ── debrief: home prompt → speak/type → saved on the session ──
+    log('home: undebriefed session prompts 🎙', !!q('[data-act="debrief-session"]'));
+    q('[data-act="debrief-session"]').click();
+    await sleep(300);
+    log('debrief modal opens', D().getElementById('debrief-modal').open);
+    D().getElementById('db-text').value = 'Felt strong, slept 8h, slight left shoulder tweak on the last set.';
+    D().getElementById('db-send').click();
+    await sleep(400);
+    const dbS = state().sessions.find(s => s.debrief);
+    log('debrief saved to the session (no API key → stored anyway)', !!dbS && dbS.debrief.text.includes('shoulder'));
+    log('home: debrief prompt cleared after saving', !q('[data-act="debrief-session"]'));
 
     // ── edit round-trip (new workout, resumed same day) ──
     q('[data-act="start-workout"]').click();
@@ -119,8 +133,9 @@ async function loadApp() {
     // ── coach chips ──
     W().nav('coach');
     await sleep(300);
+    log('coach: full-screen overlay with inner scroller', !!q('.coach-wrap') && getComputedStyle(q('.coach-wrap')).position === 'fixed');
     log('coach: chips render', D().querySelectorAll('#coach-chips [data-chip]').length === 4);
-    log('coach: dock fixed input present', !!q('#coach-dock #coach-text'));
+    log('coach: dock input present', !!q('#coach-dock #coach-text'));
     q('#coach-chips [data-chip="0"]').click();
     await sleep(200);
     log('coach: chip stuffs a real prompt (send blocked w/o key)', (q('#coach-text').value || '').toLowerCase().includes('program'));
@@ -136,8 +151,9 @@ async function loadApp() {
     await sleep(400);
     log('plan day: brief shows plan context', aw().mode === 'brief' && /UPPER/.test(q('.brief-sub')?.textContent || ''));
     q('[data-act="lets-go"]').click();
-    await sleep(4800);                                             // 3-2-1-GO
-    log('plan day: set screen @ target weight', aw().mode === 'set' && q('.set-table input[data-fld="w"]')?.value === '100');
+    await sleep(4800); W().wkTick(); await sleep(200);             // 3-2-1-GO (intervals don't fire in headless virtual time — drive the tick)
+    log('plan day: set screen @ target weight', aw().mode === 'set' && q('.set-table input[data-fld="w"]')?.value === '100',
+        `mode=${aw()?.mode} w=${q('.set-table input[data-fld="w"]')?.value}`);
     q('[data-act="done-set"]').click(); await sleep(300);
     q('[data-act="rest-skip"]')?.click(); await sleep(300);
     q('[data-act="done-set"]').click(); await sleep(500);
