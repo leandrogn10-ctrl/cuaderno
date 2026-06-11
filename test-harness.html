@@ -38,6 +38,17 @@ function state() { return JSON.parse(W().localStorage.getItem('cuaderno.v1')); }
     await sleep(400);
     log('workout view: set table rendered', !!q('.set-table'));
     log('workout view: rows prefilled', !!q('.set-table input[data-fld="w"]') && q('.set-table input[data-fld="w"]').value.length > 0);
+    log('player: media panel with FIND VIDEO tile (no url yet)', !!q('.media-panel .mono-tile [data-act="find-video"]'));
+    log('player: nav bar present', !!q('.player-nav .pn-next'));
+    // stepper bumps the weight input by the exercise step
+    const w0 = q('.set-table input[data-fld="w"]');
+    const before = parseFloat(w0.value);
+    q('[data-act="step-w"][data-d="1"]').click();
+    await sleep(150);
+    const stepEx = state().exercises.find(x => x.id === state().activeWorkout.exercises[0].exerciseId);
+    log('player: weight stepper +step', Math.abs(parseFloat(q('.set-table input[data-fld="w"]').value) - (before + (stepEx.step || 5))) < 0.01, `${before} -> ${q('.set-table input[data-fld="w"]').value}`);
+    q('[data-act="step-w"][data-d="-1"]').click();   // back to baseline
+    await sleep(150);
     const ck = q('[data-act="check-row"]');
     ck.click();                                        // tap 3
     await sleep(300);
@@ -81,6 +92,40 @@ function state() { return JSON.parse(W().localStorage.getItem('cuaderno.v1')); }
     exRow.click();
     await sleep(400);
     log('exercise detail: records + chart canvas', !!q('.rec-grid') && !!q('#cv-e1rm'));
+
+    // 4b. player navigation: add a 2nd exercise, NEXT/PREV, focus reload-persistence, iframe when url set
+    W().nav('home');
+    await sleep(250);
+    q('[data-act="start-workout"]').click();   // resume-less: creates fresh (prev finished) → folds done rows
+    await sleep(350);
+    if (D().body.dataset.view !== 'workout') { log('player nav: could not reopen workout', false); }
+    q('[data-act="add-exercise"]').click();
+    await sleep(300);
+    const rows2 = D().querySelectorAll('#picker-list [data-act="pick-exercise"]');
+    rows2[1].click();   // add a different exercise
+    await sleep(350);
+    const stA = state();
+    log('player: overview chips match exercises', D().querySelectorAll('.ov-strip [data-act="jump-ex"]').length === stA.activeWorkout.exercises.length, D().querySelectorAll('.ov-strip [data-act="jump-ex"]').length + ' chips');
+    log('player: one exercise table at a time', D().querySelectorAll('.px-name').length === 1);
+    const nameBefore = q('.px-name').textContent;
+    q('[data-act="prev-ex"]') && q('[data-act="prev-ex"]').click();
+    await sleep(300);
+    log('player: PREV moves focus', q('.px-name').textContent !== nameBefore, `${nameBefore} -> ${q('.px-name').textContent}`);
+    const focusVal = state().activeWorkout.focus;
+    f.src = 'index.html';
+    await new Promise(r => f.onload = r);
+    await sleep(600);
+    log('player: focus survives reload', state().activeWorkout.focus === focusVal && D().body.dataset.view === 'workout', 'focus=' + state().activeWorkout.focus);
+    // inject a videoUrl on the focused exercise → media panel becomes an embed
+    const fx = state().activeWorkout.exercises[state().activeWorkout.focus].exerciseId;
+    W().eval(`exById('${fx}').videoUrl='https://www.youtube.com/watch?v=dQw4w9WgXcQ'; renderView();`);
+    await sleep(250);
+    log('player: iframe embed when videoUrl set', !!q('.media-panel iframe'));
+    W().eval(`exById('${fx}').videoUrl=null;`);
+    W().confirm = () => true;
+    q('[data-act="cancel-workout"]').click();
+    await sleep(300);
+    log('player: cancel returns home', D().body.dataset.view === 'home');
 
     // 5. plan lifecycle (inject a plan directly, then start a day)
     W().acceptPlan({ type: 'plan', name: 'TEST UL', days: [
