@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!-- Cuaderno deploy-gate harness: drives the app in an iframe and writes PASS/FAIL lines into #out.
+     Run: python3 -m http.server → headless Chrome --virtual-time-budget=12000 --dump-dom http://localhost:PORT/test-harness.html
+     Greps: "HARNESS:" lines in the dumped DOM. Uses localStorage of the test origin only. -->
+<html>
+<body>
+<pre id="out"></pre>
+<iframe id="f" src="about:blank" style="width:400px;height:800px"></iframe>
+<script>
+'use strict';
+const out = [];
+function log(name, ok, extra) { out.push(`HARNESS: ${ok ? 'PASS' : 'FAIL'} — ${name}${extra ? ' — ' + extra : ''}`); render(); }
+function render() { document.getElementById('out').textContent = out.join('\n'); }
+const f = document.getElementById('f');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function W() { return f.contentWindow; }
+function D() { return f.contentDocument; }
+function q(sel) { return D().querySelector(sel); }
+function state() { return JSON.parse(W().localStorage.getItem('cuaderno.v1')); }
+
+(async () => {
+  try {
+    localStorage.clear();   // same origin as iframe → fresh app state
+    // 1. boot
+    f.src = 'index.html';
+    await new Promise(r => f.onload = r);
+    await sleep(600);
+    log('boot: HOME renders START WORKOUT', !!q('[data-act="start-workout"]'));
+    log('boot: week strip present', !!q('.week-strip'));
+    log('boot: no plan card on fresh state', !q('.plan-card'));
+
+    // 2. 3-tap test: START → pick exercise → ✓
+    q('[data-act="start-workout"]').click();           // tap 1
+    await sleep(400);
+    const pick = q('#picker-list [data-act="pick-exercise"]');
+    log('picker auto-opens on empty start', !!pick);
+    pick.click();                                      // tap 2
+    await sleep(400);
+    log('workout view: set table rendered', !!q('.set-table'));
+    log('workout view: rows prefilled', !!q('.set-table input[data-fld="w"]') && q('.set-table input[data-fld="w"]').value.length > 0);
+    const ck = q('[data-act="check-row"]');
+    ck.click();                                        // tap 3
+    await sleep(300);
+    const st1 = state();
+    const sets = st1.sessions[0]?.entries[0]?.sets || [];
+    log('3-tap: first set logged', sets.length === 1, JSON.stringify(sets[0] || null));
+    log('3-tap: activeWorkout row marked done', st1.activeWorkout?.exercises[0]?.rows[0]?.done === true);
+    log('rest pill counting down', q('#rest-pill').classList.contains('show') && /\d:\d\d/.test(q('#rest-time').textContent));
+    log('row visually done', q('.tr.done') !== null);
+
+    // 3. edit an unchecked row's weight, then reload → persistence
+    const w2 = q('.tr:not(.done) input[data-fld="w"]');
+    if (w2) { const Ev = W().Event; w2.value = '199'; w2.dispatchEvent(new Ev('change', { bubbles: true })); }
+    await sleep(200);
+    f.src = 'index.html';                              // simulated reload
+    await new Promise(r => f.onload = r);
+    await sleep(600);
+    log('reload: workout view restored', D().body.dataset.view === 'workout');
+    log('reload: done row survived', !!q('.tr.done'));
+    const w2b = q('.tr:not(.done) input[data-fld="w"]');
+    log('reload: edited unchecked weight survived', !!w2b && w2b.value === '199', w2b && w2b.value);
+
+    // 4. finish → summary → home; history shows the session
+    W().confirm = () => true;                          // auto-accept "discard unchecked"
+    q('[data-act="finish-workout"]').click();
+    await sleep(500);
+    log('summary renders', D().body.dataset.view === 'summary' && !!q('.sum-hero'));
+    const st2 = state();
+    log('finish: activeWorkout cleared + endedAt set', st2.activeWorkout === null && !!st2.sessions[0].endedAt);
+    q('[data-act="goto-home"]').click();
+    await sleep(300);
+    log('back home, feed shows workout', D().body.dataset.view === 'home' && !!q('[data-act="open-session"]'));
+    q('#bottom-tabs') /* exists */;
+    W().nav('history');
+    await sleep(300);
+    log('history lists the session', !!q('[data-act="open-session"]'));
+    W().nav('exercises');
+    await sleep(300);
+    const exRow = q('[data-act="open-exercise"]');
+    log('exercises screen lists movements', !!exRow);
+    exRow.click();
+    await sleep(400);
+    log('exercise detail: records + chart canvas', !!q('.rec-grid') && !!q('#cv-e1rm'));
+
+    // 5. plan lifecycle (inject a plan directly, then start a day)
+    W().acceptPlan({ type: 'plan', name: 'TEST UL', days: [
+      { name: 'UPPER', exercises: [{ name: 'Bench Press', sets: 2, reps: 5, startWeight: 100, videoQuery: 'bench' }] },
+      { name: 'LOWER', exercises: [{ name: 'Squat', sets: 2, reps: 5, videoQuery: 'squat' }] },
+    ]});
+    await sleep(400);
+    log('plan accepted: card on home', !!q('.plan-card'));
+    q('[data-act="start-workout"]').click();
+    await sleep(400);
+    const inputs = D().querySelectorAll('.set-table input[data-fld="w"]');
+    // earlier same-day work folds in as done rows, so expect AT LEAST the 2 plan rows, first ones @100
+    log('plan day: rows from targets', D().body.dataset.view === 'workout' && inputs.length >= 2 && inputs[0].value === '100' && inputs[1].value === '100', inputs.length + ' rows');
+    D().querySelectorAll('[data-act="check-row"]').forEach(b => b.click());
+    await sleep(300);
+    q('[data-act="finish-workout"]').click();
+    await sleep(400);
+    const st3 = state();
+    log('plan cursor advanced after finish', st3.plan.cursor === 1, 'cursor=' + st3.plan.cursor);
+    log('ALL DONE', true);
+  } catch (e) {
+    log('EXCEPTION', false, e.message + ' @ ' + (e.stack || '').split('\n')[1]);
+  }
+})();
+</script>
+</body>
+</html>
