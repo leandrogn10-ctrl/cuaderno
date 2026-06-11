@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>El Cuaderno</title>
+<title>La Forja</title>
 <meta name="theme-color" content="#0a0c09">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Cuaderno">
+<meta name="apple-mobile-web-app-title" content="Forja">
 <link rel="apple-touch-icon" id="apple-touch-icon-link">
 <script>
 /* SLOT:APP-CONFIG (from app-shell) */
 window.APP = {
-  name: 'El Cuaderno',
-  shortName: 'Cuaderno',
+  name: 'La Forja',
+  shortName: 'Forja',
   tagline: '— the training log',
   description: 'Phone-first training log',
-  iconLetter: 'C',
+  iconLetter: 'F',
   iconBg: '#0a0c09', iconFg: '#c8ff1f',
   STORAGE_KEY: 'cuaderno.v1',
   GIST_FILENAME: 'cuaderno.json',
@@ -537,7 +537,7 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
 <div class="app">
   <header class="topbar">
     <div class="brand">
-      <h1>EL CUADERNO<span class="volt">.</span></h1>
+      <h1>LA FORJA<span class="volt">.</span></h1>
       <span class="tagline">training log</span>
     </div>
     <div class="actions">
@@ -691,7 +691,7 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
       </div>
       <div class="settings-section">
         <h3>Cloud sync (GitHub Gist)</h3>
-        <div class="desc">Data lives in a private gist — Cuaderno gets its OWN gist (don't reuse Bitácora's). Last-write-wins.</div>
+        <div class="desc">Data lives in a private gist — La Forja gets its OWN gist (don't reuse Bitácora's). Last-write-wins.</div>
         <div id="sync-config-blurb"></div>
         <div class="form-grid">
           <label class="span-2">GitHub personal access token<input type="password" id="sync-pat" placeholder="ghp_..." autocomplete="off"></label>
@@ -748,7 +748,7 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
 
 const STORAGE_KEY = APP.STORAGE_KEY;
 const GIST_FILENAME = APP.GIST_FILENAME;
-const DEFAULT_CLAUDE_RULES = `You are Coach inside El Cuaderno, Leandro's training log. Be direct, technical, motivating without cheerleading. Short answers. Push progressive overload but respect recovery and the program note. Never invent training history — use only the context given.`;
+const DEFAULT_CLAUDE_RULES = `You are Coach inside La Forja, Leandro's training log. Be direct, technical, motivating without cheerleading. Short answers. Push progressive overload but respect recovery and the program note. Never invent training history — use only the context given.`;
 const LB = 0.45359237;
 
 /* ── app hooks ── */
@@ -2366,7 +2366,7 @@ async function syncPull(force = false) {
     const file = gist.files?.[GIST_FILENAME];
     if (!file) { setSyncPipState('on'); return; }
     const remoteState = JSON.parse(file.content);
-    if (!looksLikeMyState(remoteState)) { toast(`gist file ${GIST_FILENAME} doesn't look like Cuaderno state — not adopting it.`, true); setSyncPipState('error'); return; }
+    if (!looksLikeMyState(remoteState)) { toast(`gist file ${GIST_FILENAME} doesn't look like La Forja state — not adopting it.`, true); setSyncPipState('error'); return; }
     const remoteModified = remoteState.lastModified || 0;
     const localModified = state.lastModified || 0;
     if (force || remoteModified > localModified) {
@@ -2465,8 +2465,8 @@ document.getElementById('import-file').addEventListener('change', async e => {
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
-    if (!looksLikeMyState(parsed)) throw new Error('not a Cuaderno file');
-    if (!confirm('Replace your current Cuaderno data with this file?')) return;
+    if (!looksLikeMyState(parsed)) throw new Error('not a La Forja file');
+    if (!confirm('Replace your current La Forja data with this file?')) return;
     const preservedSync = state.settings.sync;
     const preservedClaude = state.settings.claude;
     state = migrate(parsed);
