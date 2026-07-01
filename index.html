@@ -180,6 +180,7 @@ a { color: var(--accent); text-decoration: none; border-bottom: 1px dashed var(-
 .plan-card .plan-tag .drop { color: var(--ink-faint); letter-spacing: 0.08em; cursor: pointer; }
 .plan-card .plan-tag .drop:hover { color: var(--danger); }
 .plan-card h3 { font-size: 26px; line-height: 0.95; margin-bottom: 8px; }
+.plan-card .plan-next { font-size: 10px; color: var(--cool); letter-spacing: 0.16em; text-transform: uppercase; margin: -5px 0 8px; }
 .plan-card .plan-ex { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line-soft); font-size: 12px; color: var(--ink-dim); }
 .plan-card .plan-ex .t { flex: 1; }
 .plan-card .plan-ex .n { color: var(--ink); }
@@ -602,19 +603,21 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
   </div>
 </dialog>
 
-<!-- ── post-workout debrief ── -->
+<!-- ── post-workout debrief / any-time check-in (shared modal, DB_CTX.mode switches) ── -->
 <dialog id="debrief-modal">
   <div class="modal">
-    <header><div><h2>Debrief</h2><p id="db-sub">how did it go?</p></div><button type="button" class="close" data-close="debrief">×</button></header>
+    <header><div><h2 id="db-title">Debrief</h2><p id="db-sub">how did it go?</p></div><button type="button" class="close" data-close="debrief">×</button></header>
     <div class="modal-body">
       <textarea id="db-text" style="width:100%;min-height:140px;background:var(--paper);border:1px solid var(--line);padding:11px 13px;font-size:16px;line-height:1.5;color:var(--ink);resize:vertical" placeholder="talk or type — energy, soreness, pain, sleep, what felt heavy, life stuff…"></textarea>
       <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap">
         <button class="btn-secondary db-mic" id="db-mic" hidden>● record</button>
+        <span class="seg" id="mic-lang-seg" title="speech recognition language"><button data-ml="en-US">EN</button><button data-ml="es-PE">ES</button></span>
+        <button class="btn-secondary" id="db-tidy" hidden>✨ tidy</button>
         <span style="font-size:10px;color:var(--ink-faint);letter-spacing:0.06em">tip: the 🎙 on your keyboard dictates straight into the box</span>
       </div>
       <div id="db-reply" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
     </div>
-    <footer><span style="font-size:10px;color:var(--ink-faint)">saved to this session — coach reads these</span><button class="btn-primary chamfer" id="db-send">SEND</button></footer>
+    <footer><span id="db-foot" style="font-size:10px;color:var(--ink-faint)">saved to this session — coach reads these</span><button class="btn-primary chamfer" id="db-send">SEND</button></footer>
   </div>
 </dialog>
 
@@ -659,6 +662,13 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
             <span class="label">Reactor</span>
             <span class="sub">blue-black / cyan</span>
           </button>
+        </div>
+      </div>
+      <div class="settings-section">
+        <h3>Training days</h3>
+        <div class="desc">Which weekdays you train — drives the NEXT-workout line on home (and what LeandroOS reports). Stored on the current plan.</div>
+        <div class="seg" id="sched-seg" style="flex-wrap:wrap">
+          <button data-wd="1">Mon</button><button data-wd="2">Tue</button><button data-wd="3">Wed</button><button data-wd="4">Thu</button><button data-wd="5">Fri</button><button data-wd="6">Sat</button><button data-wd="0">Sun</button>
         </div>
       </div>
       <div class="settings-section">
@@ -776,7 +786,9 @@ function appDefaultState() {
 function appMigrate(s) {
   s.exercises = s.exercises || []; s.sessions = s.sessions || [];
   s.bodyweight = s.bodyweight || []; s.cardio = s.cardio || [];
+  s.checkins = s.checkins || [];
   s.plan = s.plan || null;
+  if (s.plan && s.plan.schedule === undefined) s.plan.schedule = null;   // JS weekdays (0=Sun…6=Sat)
   s.activeWorkout = s.activeWorkout || null;
   if (s.activeWorkout) {
     if (typeof s.activeWorkout.focus !== 'number') s.activeWorkout.focus = 0;
@@ -789,6 +801,7 @@ function appMigrate(s) {
   s.settings.restDefault = s.settings.restDefault || 90;
   s.settings.claude.programNote = s.settings.claude.programNote ?? '';
   s.settings.claude.equipment = s.settings.claude.equipment ?? '';
+  s.settings.micLang = s.settings.micLang || 'en-US';   // speech recognition ≠ phone language (his phone is es, debriefs are en)
   return s;
 }
 function looksLikeMyState(s) {
@@ -993,24 +1006,50 @@ function renderHome() {
       </div>`;
     });
   }
-  html += `<div class="quick-row" style="margin-top:14px"><button data-act="log-bw">⊙ bodyweight</button><button data-act="log-cardio">∿ cardio</button></div>`;
+  html += `<div class="quick-row" style="margin-top:14px"><button data-act="log-bw">⊙ bodyweight</button><button data-act="log-cardio">∿ cardio</button><button data-act="log-checkin">♥ check-in</button></div>`;
   const bw = [...state.bodyweight].sort((a, b) => b.date.localeCompare(a.date))[0];
   const cd = state.cardio.filter(c => c.date === today());
-  if (bw || cd.length) {
+  const ci = state.checkins[state.checkins.length - 1];
+  if (bw || cd.length || ci) {
     html += `<div class="daylog">`;
     if (bw) html += `<div class="dl-row"><span>bodyweight (${bw.date})</span><span class="v">${fmtN(dispW(bw.w))} ${unitLbl()}</span></div>`;
     for (const c of cd) html += `<div class="dl-row"><span>${escapeHtml(c.kind)} today</span><span class="v">${c.min} min${c.dist ? ' · ' + c.dist : ''}</span></div>`;
+    if (ci) html += `<div class="dl-row"><span>check-in (${ci.date})</span><span class="v">${escapeHtml(ci.text.slice(0, 48))}${ci.text.length > 48 ? '…' : ''}</span></div>`;
     html += `</div>`;
   }
   viewRoot.innerHTML = html;
 }
 VIEWS.home = renderHome;
 
+/* next scheduled training day: TODAY if scheduled and not yet trained, else the next schedule hit.
+   plan.schedule = JS weekdays (0=Sun…6=Sat); null = flexible (next calendar day). */
+function nextWorkout() {
+  const p = state.plan;
+  if (!p || !p.days?.length) return null;
+  const day = p.days[p.cursor % p.days.length];
+  const sched = p.schedule?.length ? p.schedule : null;
+  const trainedToday = state.sessions.some(s => s.date === today() && sessionSets(s) > 0);
+  const d = new Date(); d.setHours(12, 0, 0, 0);
+  for (let i = 0; i < 14; i++) {
+    if (!(i === 0 && trainedToday) && (!sched || sched.includes(d.getDay()))) return { day, date: new Date(d), inDays: i };
+    d.setDate(d.getDate() + 1);
+  }
+  return null;
+}
+function nextWorkoutLabel() {
+  const nw = nextWorkout();
+  if (!nw) return '';
+  const when = nw.inDays === 0 ? 'TODAY' : nw.inDays === 1 ? 'TOMORROW'
+    : nw.date.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+  return `${when} · ${nw.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
 function renderPlanCard() {
   const p = state.plan;
   if (!p || !p.days?.length) return '';
   const day = p.days[p.cursor % p.days.length];
+  const next = nextWorkoutLabel();
   let h = `<div class="plan-card chamfer"><div class="plan-tag"><span>PLAN · ${escapeHtml(p.name)} · day ${(p.cursor % p.days.length) + 1}/${p.days.length}</span><span class="drop" data-act="drop-plan">drop</span></div><h3>${escapeHtml(day.name)}</h3>`;
+  if (next) h += `<div class="plan-next">NEXT: ${next}</div>`;
   for (const t of day.exercises) {
     h += `<div class="plan-ex">${thumbFor(exById(t.exerciseId), true)}<span class="t"><span class="n">${escapeHtml(t.name)}</span> — ${t.sets}×${t.sec ? t.sec + 's' : t.reps}${t.w ? ' @ ' + fmtN(dispW(t.w)) : ''}</span><button class="vbtn" data-act="plan-video" data-name="${escapeHtml(t.name)}">▶</button></div>`;
   }
@@ -1023,7 +1062,7 @@ function renderPlanCard() {
    Image paths come from each entry's `images` array (name-derived dirs), never from `id`. */
 const EXDB_INDEX_URL = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
 const EXDB_IMG_PREFIX = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
-const EXDB_ALIASES = {   // classic-lift shorthand the db doesn't use (verified against the live db)
+const EXDB_ALIASES = {   // canonical db targets (normalized names, verified against the live db)
   'overhead press': 'standing military press', 'ohp': 'standing military press',
   'rdl': 'romanian deadlift',
   'bench press': 'barbell bench press medium grip',
@@ -1031,21 +1070,59 @@ const EXDB_ALIASES = {   // classic-lift shorthand the db doesn't use (verified 
   'pull up': 'pullups', 'pull ups': 'pullups', 'pullup': 'pullups',
   'lat pulldown': 'wide grip lat pulldown',
   'barbell row': 'bent over barbell row',
+  'leg raise': 'flat bench lying leg raise',         // FLOOR version — "Hanging Leg Raise" needs a bar
+  'lying leg raise': 'flat bench lying leg raise',
+  'bicycle crunch': 'air bike',
+  'diamond push up': 'push ups close triceps position',
+  'pike push up': 'push ups with feet elevated',
+  'dumbbell overhead press': 'standing dumbbell press',
+  'dumbbell shoulder press': 'standing dumbbell press',
+  'lateral raise': 'side lateral raise', 'dumbbell lateral raise': 'side lateral raise',
+  'glute bridge': 'butt lift bridge', 'dumbbell glute bridge': 'butt lift bridge',
+  'goblet squat': 'goblet squat', 'dumbbell goblet squat': 'goblet squat',
+  'dumbbell row': 'bent over two dumbbell row',
+  'dumbbell calf raise': 'calf raise on a dumbbell',
+  'dumbbell romanian deadlift': 'stiff legged dumbbell deadlift',
 };
 let EXDB_INDEX = null, EXDB_FETCHING = false;
 const exdbNorm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-function exdbMap() { try { return JSON.parse(localStorage.getItem('cuaderno.exdb.v1') || '{}'); } catch (e) { return {}; } }
+const exdbToks = s => exdbNorm(s).split(' ').filter(Boolean).map(t => t === 'db' ? 'dumbbell' : t);
+const exdbTokEq = (a, b) => a === b || a + 's' === b || b + 's' === a || a + 'es' === b || b + 'es' === a;
+/* db `equipment` values the user's gear can serve — null when no equipment is declared */
+function exdbAllowed() {
+  const e = (state.settings.claude.equipment || '').toLowerCase();
+  if (!e) return null;
+  const a = new Set(['body only']);
+  if (e.includes('dumbbell')) a.add('dumbbell');
+  if (e.includes('barbell')) a.add('barbell');
+  if (e.includes('band')) a.add('bands');
+  if (e.includes('kettlebell')) a.add('kettlebells');
+  if (e.includes('cable') || e.includes('machine')) { a.add('cable'); a.add('machine'); }
+  if (e.includes('ball')) { a.add('exercise ball'); a.add('medicine ball'); }
+  return a;
+}
+function exdbMap() { try { return JSON.parse(localStorage.getItem('cuaderno.exdb.v2') || '{}'); } catch (e) { return {}; } }
+/* plural-tolerant token scoring: exact > squashed-equal ("pushups"≈"push up") > candidate⊆target
+   (plain variant) > target⊆candidate (qualified variant) > 2+ shared tokens; equipment the user
+   owns breaks ties so "Hanging X" never beats a floor version he can actually do */
 function exdbMatch(key) {
-  const target = EXDB_ALIASES[key] || key;
-  let best = null, bestScore = -1;
+  const target = EXDB_ALIASES[exdbToks(key).join(' ')] || key;
+  const tt = exdbToks(target), tsq = tt.join('');
+  const allowed = exdbAllowed();
+  let best = null, bestScore = -Infinity;
   for (const e of EXDB_INDEX) {
     const n = exdbNorm(e.name);
     if (n === target) { best = e; break; }
-    if (n.includes(target) || target.includes(n)) {
-      const tt = target.split(' '), nn = new Set(n.split(' '));
-      const score = tt.filter(t => nn.has(t)).length * 1000 - n.length;   // token overlap, then prefer the shortest (plain) variant
-      if (score > bestScore) { bestScore = score; best = e; }
-    }
+    const ct = exdbToks(n), csq = ct.join('');
+    const ov = ct.filter(c => tt.some(t => exdbTokEq(c, t))).length;
+    const sqEq = csq === tsq || csq === tsq + 's' || tsq === csq + 's';
+    const sqIn = csq.includes(tsq) || tsq.includes(csq);
+    const cInT = ov === ct.length, tInC = ov === tt.length;
+    if (!sqEq && !sqIn && !cInT && !tInC && ov < 2) continue;
+    let score = ov * 1000 - n.length
+      + (sqEq ? 1e6 : 0) + (cInT ? 6000 : 0) + (tInC ? 3000 : 0) + (sqIn ? 2000 : 0);
+    if (allowed && e.equipment) score += allowed.has(e.equipment) ? 1500 : -3000;
+    if (score > bestScore) { bestScore = score; best = e; }
   }
   if (!best || !best.images?.length) return null;
   return { imgs: [EXDB_IMG_PREFIX + best.images[0], EXDB_IMG_PREFIX + (best.images[1] || best.images[0])], instructions: (best.instructions || []).slice(0, 6) };
@@ -1058,7 +1135,7 @@ function exdbResolve(ex) {
   if (EXDB_INDEX) {
     const entry = exdbMatch(key);
     map[key] = entry || { miss: true };   // cache misses too (only once the index was consulted)
-    try { localStorage.setItem('cuaderno.exdb.v1', JSON.stringify(map)); } catch (e) {}
+    try { localStorage.setItem('cuaderno.exdb.v2', JSON.stringify(map)); } catch (e) {}
     return entry;
   }
   exdbFetch();   // async; the next render upgrades the tile
@@ -1233,6 +1310,7 @@ function runnerSkip(scope) {     // 'set' | 'exercise'
 function runnerAdvanceFromRest() {
   const aw = state.activeWorkout; if (!aw) return;
   aw.rest = null;
+  cueCancel();
   aw.mode = 'set'; aw.setStartedAt = Date.now();
   save({ push: false }); renderView();
 }
@@ -1251,6 +1329,7 @@ function startHold() {
   // commit a possibly-edited seconds/weight input before arming the timer
   document.querySelectorAll(`input[data-xi="${xi}"][data-ri="${ri}"]`).forEach(commitRowInput);
   aw.hold = { endsAt: Date.now() + row.sec * 1000, dur: row.sec * 1000 };
+  cueSchedule(aw.hold.endsAt);
   save({ push: false });
   renderView();
 }
@@ -1266,6 +1345,7 @@ function finishHold(early = true) {
     if (inp) inp.value = row.sec;   // keep the input in sync — checkRow re-commits it
   }
   aw.hold = null;
+  cueCancel();   // runnerDoneSet → startRest re-arms cues for the rest countdown
   runnerDoneSet();
 }
 function renderWorkout() {
@@ -1643,17 +1723,74 @@ function confettiBurst(withHot) {
   })(t0);
 }
 
+/* ═══ audio cues: WebAudio beeps scheduled against the timer's endsAt — the audio clock keeps
+   running in background tabs (setInterval throttles there), so the T-5s blip and the GO tone
+   land on time even when he's in another tab. Context unlocks on the first tap. ═══ */
+let AC = null, CUE_NODES = [];
+document.addEventListener('pointerdown', () => {
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+  } catch (e) {}
+  // a timer running without scheduled cues (page reloaded mid-rest, or ctx just unlocked) → arm now
+  const t = state.activeWorkout?.hold?.endsAt || state.activeWorkout?.rest?.endsAt;
+  if (t && t > Date.now() + 250 && !CUE_NODES.length) cueSchedule(t);
+}, { capture: true });
+function cueCancel() { for (const n of CUE_NODES) { try { n.stop(); } catch (e) {} } CUE_NODES = []; }
+function cueBeep(at, freq, dur, gain = 0.12) {
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.type = 'sine'; o.frequency.value = freq;
+  g.gain.setValueAtTime(0, at);
+  g.gain.linearRampToValueAtTime(gain, at + 0.01);
+  g.gain.setValueAtTime(gain, Math.max(at + 0.01, at + dur - 0.04));
+  g.gain.linearRampToValueAtTime(0, at + dur);
+  o.connect(g); g.connect(AC.destination);
+  o.start(at); o.stop(at + dur + 0.02);
+  CUE_NODES.push(o);
+}
+function cueSchedule(endsAt) {   // double-blip at T-5s + a GO tone at zero
+  cueCancel();
+  if (!AC || AC.state !== 'running') return;
+  const base = AC.currentTime + Math.max(0, (endsAt - Date.now()) / 1000);
+  if (base - AC.currentTime > 5.2) { cueBeep(base - 5, 880, 0.1); cueBeep(base - 4.72, 880, 0.1); }
+  cueBeep(base, 1320, 0.4);
+}
+/* ── progress bars: one continuous CSS transition to 0% keyed on the timer instance.
+   Wall-clock-based, so after a background-tab stint the bar renders exactly where it
+   should be — no per-tick stepping, no rapid catch-up animation. ── */
+function armBar(el, r) {
+  if (!el || !r) return;
+  const key = r.endsAt + ':' + r.dur;
+  if (el.dataset.arm === key) return;
+  el.dataset.arm = key;
+  const remain = Math.max(0, r.endsAt - Date.now());
+  el.style.transition = 'none';
+  el.style.width = Math.min(100, 100 * remain / r.dur) + '%';
+  void el.offsetWidth;   // commit the start width before animating
+  el.style.transition = `width ${remain}ms linear`;
+  el.style.width = '0%';
+}
+function disarmBar(el, width) {
+  if (!el) return;
+  el.dataset.arm = '';
+  el.style.transition = 'none';
+  el.style.width = width;
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wkTick(); });
+
 /* ═══ rest countdown + elapsed ticker ═══ */
 function startRest() {
   const dur = (state.settings.restDefault || 90) * 1000;
   state.activeWorkout.rest = { endsAt: Date.now() + dur, dur };
+  cueSchedule(state.activeWorkout.rest.endsAt);
   restRender();
 }
-function clearRest() { if (state.activeWorkout) state.activeWorkout.rest = null; restRender(); }
+function clearRest() { if (state.activeWorkout) state.activeWorkout.rest = null; cueCancel(); restRender(); }
 function bumpRest(deltaSec) {
   const r = state.activeWorkout?.rest; if (!r) return;
   r.endsAt = Math.max(Date.now() + 1000, r.endsAt + deltaSec * 1000);
   r.dur = Math.max(1000, r.dur + deltaSec * 1000);
+  cueSchedule(r.endsAt);
   save({ push: false }); restRender();
 }
 function restRender() {
@@ -1666,15 +1803,14 @@ function restRender() {
   if (remain <= 0) {
     pill.classList.add('zero');
     document.getElementById('rest-time').textContent = 'GO';
-    document.getElementById('rest-bar').style.width = '100%';
+    disarmBar(document.getElementById('rest-bar'), '100%');
     if (!r.buzzed) { r.buzzed = true; try { navigator.vibrate?.([200, 100, 200]); } catch (e) {} }
     if (remain < -4000) { state.activeWorkout.rest = null; pill.classList.remove('show', 'zero'); }
     return;
   }
   pill.classList.remove('zero');
-  const sec = Math.ceil(remain / 1000);
-  document.getElementById('rest-time').textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
-  document.getElementById('rest-bar').style.width = Math.max(0, 100 * remain / r.dur) + '%';
+  document.getElementById('rest-time').textContent = fmtClock(remain);
+  armBar(document.getElementById('rest-bar'), r);
 }
 let _lastCount = null;
 function wkTick() {
@@ -1715,14 +1851,13 @@ function wkTick() {
         if (remain <= 0) {
           if (!r.buzzed) { r.buzzed = true; try { navigator.vibrate?.([200, 100, 200]); } catch (e) {} }
           if (big) { big.textContent = 'GO'; big.classList.add('go'); }
-          if (bar) bar.style.width = '100%';
+          disarmBar(bar, '100%');
           if (!r.goAt) r.goAt = Date.now();
           else if (Date.now() - r.goAt > 900) runnerAdvanceFromRest();
         } else if (big) {
-          const sec = Math.ceil(remain / 1000);
-          big.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+          big.textContent = fmtClock(remain);
           big.classList.remove('go');
-          if (bar) bar.style.width = Math.max(0, 100 * remain / r.dur) + '%';
+          armBar(bar, r);
         }
       }
     }
@@ -1922,7 +2057,11 @@ function coachContext() {
   const lines = [];
   lines.push(`Units: ${state.settings.units}. Today: ${today()}.`);
   if (state.settings.claude.programNote) lines.push(`Program note: ${state.settings.claude.programNote}`);
-  if (state.plan) lines.push(`Active plan: "${state.plan.name}" — day cursor ${state.plan.cursor % state.plan.days.length + 1}/${state.plan.days.length} (${state.plan.days.map(d => d.name).join(', ')})`);
+  if (state.plan) {
+    const WDN = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    lines.push(`Active plan: "${state.plan.name}" — day cursor ${state.plan.cursor % state.plan.days.length + 1}/${state.plan.days.length} (${state.plan.days.map(d => d.name).join(', ')})`
+      + (state.plan.schedule?.length ? `. Trains ${state.plan.schedule.map(w => WDN[w]).join('/')}. Next workout: ${nextWorkoutLabel()}` : ''));
+  }
   const recent = sessionsDesc().slice(0, 8).reverse();
   if (recent.length) {
     lines.push('', 'Recent sessions:');
@@ -1953,6 +2092,11 @@ function coachContext() {
     lines.push('', 'Post-workout debriefs (his own words — weigh these heavily for recovery/pain/motivation):');
     for (const s of debs) lines.push(`- ${s.date}: ${s.debrief.text.slice(0, 280)}`);
   }
+  const cis = state.checkins.slice(-3);
+  if (cis.length) {
+    lines.push('', 'Check-ins (how he said he felt, possibly days after training — weigh pain reports heavily):');
+    for (const c of cis) lines.push(`- ${c.date}: ${c.text.slice(0, 280)}`);
+  }
   return lines.join('\n');
 }
 function appBuildClaudeSystem() {
@@ -1971,6 +2115,7 @@ function appBuildClaudeSystem() {
     `When (and only when) you propose a training program, include EXACTLY ONE fenced \`\`\`json block with this shape (weights in ${state.settings.units}, omit startWeight if unknown):`,
     '{"type":"plan","name":"<short name>","days":[{"name":"<e.g. PUSH A>","exercises":[{"name":"<exercise>","sets":4,"reps":8,"startWeight":135,"videoQuery":"<good youtube search for form>"}]}]}',
     'For TIMED holds (plank, dead hang, wall sit…) use "seconds" instead of "reps", e.g. {"name":"Plank","sets":3,"seconds":45} — the app runs a countdown timer for these.',
+    'Optionally add "schedule":["mon","tue","thu","fri"] — the weekdays he trains (keep his current schedule unless he asks to change it).',
     'Keep normal coaching prose around the block. 2–6 days. Reuse his existing exercise names when they fit.',
     '',
     '## His training data',
@@ -2070,7 +2215,11 @@ function acceptPlan(p) {
                videoQuery: t.videoQuery || null };
     }),
   }));
-  state.plan = { id: uid(), name: String(p.name || 'PROGRAM').slice(0, 40), source: 'coach', createdAt: Date.now(), days, cursor: 0 };
+  const WD = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  const schedule = Array.isArray(p.schedule)
+    ? [...new Set(p.schedule.map(x => typeof x === 'number' ? ((x % 7) + 7) % 7 : WD[String(x).slice(0, 3).toLowerCase()]).filter(x => x !== undefined))].sort()
+    : (state.plan?.schedule || null);   // plan adjustments keep the existing training days unless coach says otherwise
+  state.plan = { id: uid(), name: String(p.name || 'PROGRAM').slice(0, 40), source: 'coach', createdAt: Date.now(), days, cursor: 0, schedule: schedule?.length ? schedule : null };
   save();
   toast('plan accepted — ' + days.length + ' days. Hit START WORKOUT.');
   nav('home');
@@ -2186,35 +2335,62 @@ document.getElementById('cd-save').addEventListener('click', () => {
 
 /* ═══ post-workout debrief: speak (dictation / Web Speech) → Claude extracts the signal ═══ */
 const debriefModal = document.getElementById('debrief-modal');
-const DB_CTX = { sessionId: null, rec: null };
+const DB_CTX = { sessionId: null, rec: null, mode: 'debrief' };
 function latestDebriefable() {   // most recent finished session (<48h) without a debrief
   const cutoff = Date.now() - 48 * 3600 * 1000;
   return sessionsDesc().find(s => sessionSets(s) > 0 && s.endedAt && s.endedAt > cutoff && !s.debrief) || null;
 }
+function renderMicLang() {
+  document.querySelectorAll('#mic-lang-seg button').forEach(b => b.classList.toggle('active', b.dataset.ml === state.settings.micLang));
+}
+document.querySelectorAll('#mic-lang-seg button').forEach(b => b.addEventListener('click', () => {
+  state.settings.micLang = b.dataset.ml; save(); renderMicLang();
+  if (DB_CTX.rec) DB_CTX.rec.stop();   // applies on the next recording
+}));
 function openDebrief(sessionId) {
   const s = sessionById(sessionId); if (!s) return;
-  DB_CTX.sessionId = sessionId;
+  DB_CTX.mode = 'debrief'; DB_CTX.sessionId = sessionId;
+  document.getElementById('db-title').textContent = 'Debrief';
   document.getElementById('db-sub').textContent = s.date + ' — how did it go?';
+  document.getElementById('db-foot').textContent = 'saved to this session — coach reads these';
+  document.getElementById('db-text').placeholder = 'talk or type — energy, soreness, pain, sleep, what felt heavy, life stuff…';
   document.getElementById('db-text').value = s.debrief?.text || '';
   document.getElementById('db-reply').innerHTML = s.debrief?.reply ? `<div class="msg ai">${escapeHtml(s.debrief.reply)}</div>` : '';
+  setupDebriefMic();
+  debriefModal.showModal();
+}
+function openCheckin() {
+  DB_CTX.mode = 'checkin'; DB_CTX.sessionId = null;
+  document.getElementById('db-title').textContent = 'Check-in';
+  document.getElementById('db-sub').textContent = today() + ' — how does the body feel?';
+  document.getElementById('db-foot').textContent = 'saved to your log — coach reads these';
+  document.getElementById('db-text').placeholder = 'talk or type — soreness, pain (where + how bad), fatigue, anything since your last workout…';
+  document.getElementById('db-text').value = '';
+  document.getElementById('db-reply').innerHTML = '';
   setupDebriefMic();
   debriefModal.showModal();
 }
 function setupDebriefMic() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const btn = document.getElementById('db-mic');
+  renderMicLang();
+  document.getElementById('db-tidy').hidden = !isClaudeEnabled();
   if (!SR) { btn.hidden = true; return; }
   btn.hidden = false;
   btn.onclick = () => {
     if (DB_CTX.rec) { DB_CTX.rec.stop(); return; }
+    const ta = document.getElementById('db-text');
+    const base = ta.value.trim();   // text present when recording starts stays put
     const rec = new SR();
-    rec.lang = navigator.language || 'en-US';
-    rec.continuous = true; rec.interimResults = false;
+    rec.lang = state.settings.micLang || 'en-US';   // NOT navigator.language — his phone is Spanish, his debriefs aren't
+    rec.continuous = true; rec.interimResults = true;
     rec.onresult = e => {
-      const ta = document.getElementById('db-text');
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) ta.value = (ta.value + ' ' + e.results[i][0].transcript).trim();
+      let finals = '', interim = '';
+      for (let i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finals += ' ' + e.results[i][0].transcript;
+        else interim += ' ' + e.results[i][0].transcript;
       }
+      ta.value = (base + finals + interim).trim();   // live preview; finals settle in place
     };
     rec.onend = () => { DB_CTX.rec = null; btn.classList.remove('rec'); btn.textContent = '● record'; };
     rec.onerror = rec.onend;
@@ -2222,6 +2398,23 @@ function setupDebriefMic() {
     try { rec.start(); } catch (e) { rec.onend(); }
   };
 }
+/* one-tap transcript repair: the recognizer's raw output goes to Claude for a plausibility rewrite */
+document.getElementById('db-tidy').addEventListener('click', async () => {
+  const ta = document.getElementById('db-text');
+  const raw = ta.value.trim();
+  if (!raw) { toast('nothing to tidy.', true); return; }
+  if (!isClaudeEnabled()) { toast('add your API key in settings first.', true); return; }
+  if (DB_CTX.rec) DB_CTX.rec.stop();
+  const btn = document.getElementById('db-tidy');
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const out = await callClaudeChat([{ role: 'user', content:
+      'This is a raw speech-to-text transcript of me talking about how a workout went / how my body feels. It contains recognition errors. Rewrite it as what I most plausibly said: first person, keep all concrete details (exercises, weights, body parts, pain), fix garbled words, no commentary. Reply with ONLY the corrected text.\n\n' + raw }], 600);
+    ta.value = out.trim();
+    toast('transcript tidied — check it reads right.');
+  } catch (e) { toast('tidy failed: ' + e.message, true); }
+  btn.disabled = false; btn.textContent = '✨ tidy';
+});
 function sessionRecap(s) {
   return s.entries.map(en => {
     const ex = exById(en.exerciseId);
@@ -2247,7 +2440,7 @@ async function sendDebrief() {
       `Post-workout debrief for ${s.date}.`,
       `Session: ${sessionRecap(s) || '(no sets)'}.`,
       '',
-      `My debrief (spoken, transcribed): ${text}`,
+      `My debrief (spoken, transcribed — may contain recognition errors, interpret charitably): ${text}`,
       '',
       'Do three things: 1) extract the key data points in one compact line (energy, soreness, pain, sleep, stress, per-exercise feedback); 2) react in 2–3 sentences; 3) ONLY if this clearly warrants adjusting my current plan, propose the adjusted plan as the usual json block — otherwise no block.',
     ].join('\n');
@@ -2256,19 +2449,58 @@ async function sendDebrief() {
     s.debrief.reply = shown || '(noted)';
     save();
     replyBox.innerHTML = `<div class="msg ai">${escapeHtml(s.debrief.reply)}</div>`;
-    if (plan) {
-      const card = document.createElement('div');
-      card.className = 'plan-accept chamfer';
-      card.innerHTML = `<h4>${escapeHtml(plan.name || 'ADJUSTED PLAN')}</h4>${plan.days.map(d => `<div class="pa-day"><strong>${escapeHtml(d.name)}</strong> — ${(d.exercises || []).map(e => `${escapeHtml(e.name)} ${e.sets}×${planSec(e) ? planSec(e) + 's' : e.reps}`).join(', ')}</div>`).join('')}<div style="margin-top:10px"><button class="btn-primary chamfer" id="db-accept">ACCEPT ADJUSTED PLAN</button></div>`;
-      replyBox.appendChild(card);
-      document.getElementById('db-accept').addEventListener('click', () => { debriefModal.close(); acceptPlan(plan); });
-    }
+    appendPlanCard(replyBox, plan);
     renderView();
   } catch (e) {
     replyBox.innerHTML = `<div class="msg ai">couldn't reach coach (${escapeHtml(e.message)}) — debrief saved anyway.</div>`;
   }
 }
-document.getElementById('db-send').addEventListener('click', sendDebrief);
+function appendPlanCard(replyBox, plan) {
+  if (!plan) return;
+  const card = document.createElement('div');
+  card.className = 'plan-accept chamfer';
+  card.innerHTML = `<h4>${escapeHtml(plan.name || 'ADJUSTED PLAN')}</h4>${plan.days.map(d => `<div class="pa-day"><strong>${escapeHtml(d.name)}</strong> — ${(d.exercises || []).map(e => `${escapeHtml(e.name)} ${e.sets}×${planSec(e) ? planSec(e) + 's' : e.reps}`).join(', ')}</div>`).join('')}<div style="margin-top:10px"><button class="btn-primary chamfer" id="db-accept">ACCEPT ADJUSTED PLAN</button></div>`;
+  replyBox.appendChild(card);
+  document.getElementById('db-accept').addEventListener('click', () => { debriefModal.close(); acceptPlan(plan); });
+}
+/* any-time check-in: soreness/pain/energy, possibly days after the workout — coach can adjust the plan */
+async function sendCheckin() {
+  const text = document.getElementById('db-text').value.trim();
+  if (!text) { toast('say something first.', true); return; }
+  if (DB_CTX.rec) DB_CTX.rec.stop();
+  const rec = { id: uid(), ts: Date.now(), date: today(), text, reply: null };
+  state.checkins.push(rec);
+  save();   // the data point lands no matter what — coach analysis is the bonus layer
+  const replyBox = document.getElementById('db-reply');
+  if (!isClaudeEnabled()) {
+    debriefModal.close(); renderView();
+    toast('check-in saved. (add your API key for coach analysis)');
+    return;
+  }
+  replyBox.innerHTML = '<div class="msg ai thinking">reading your check-in…</div>';
+  try {
+    const last = sessionsDesc().find(s => sessionSets(s) > 0);
+    const gap = last ? Math.round((Date.now() - new Date(last.date + 'T12:00:00').getTime()) / 86400000) : null;
+    const msg = [
+      `Check-in for ${rec.date} — how he feels right now (possibly delayed soreness/pain, not a fresh post-workout report).`,
+      last ? `Last workout: ${last.date} (${gap === 0 ? 'today' : gap + 'd ago'}) — ${sessionRecap(last) || '(no sets)'}.` : 'No workouts logged yet.',
+      '',
+      `His check-in (spoken, transcribed — may contain recognition errors, interpret charitably): ${text}`,
+      '',
+      'Do three things: 1) extract the key signals in one compact line (pain location+severity, soreness, energy, sleep); 2) react in 2–3 sentences — if he reports pain, say concretely what to modify, deload, or avoid in the next session; 3) ONLY if this clearly warrants adjusting his current plan, propose the adjusted plan as the usual json block — otherwise no block.',
+    ].join('\n');
+    const out = await callClaudeChat([{ role: 'user', content: msg }], 1100);
+    const { text: shown, plan } = extractPlan(out);
+    rec.reply = shown || '(noted)';
+    save();
+    replyBox.innerHTML = `<div class="msg ai">${escapeHtml(rec.reply)}</div>`;
+    appendPlanCard(replyBox, plan);
+    renderView();
+  } catch (e) {
+    replyBox.innerHTML = `<div class="msg ai">couldn't reach coach (${escapeHtml(e.message)}) — check-in saved anyway.</div>`;
+  }
+}
+document.getElementById('db-send').addEventListener('click', () => DB_CTX.mode === 'checkin' ? sendCheckin() : sendDebrief());
 debriefModal.addEventListener('close', () => { if (DB_CTX.rec) DB_CTX.rec.stop(); });
 
 /* ═══ delegated actions (robust across rerenders) ═══ */
@@ -2346,6 +2578,7 @@ viewRoot.addEventListener('click', e => {
   else if (act === 'goto-exercises') nav('exercises');
   else if (act === 'log-bw') logBodyweight();
   else if (act === 'log-cardio') cardioModal.showModal();
+  else if (act === 'log-checkin') openCheckin();
 });
 viewRoot.addEventListener('change', e => {
   if (e.target.matches('.set-table input')) commitRowInput(e.target);
@@ -2388,9 +2621,21 @@ function openSettings() {
   document.getElementById('sync-pat').value = state.settings.sync.githubPat || '';
   document.getElementById('sync-gist-id').value = state.settings.sync.gistId || '';
   document.getElementById('rest-default').value = state.settings.restDefault || 90;
-  renderUnitsSeg(); renderClaudeStatus(); renderSyncStatus();
+  renderUnitsSeg(); renderSchedSeg(); renderClaudeStatus(); renderSyncStatus();
   settingsModal.showModal();
 }
+function renderSchedSeg() {
+  const sched = state.plan?.schedule || [];
+  document.querySelectorAll('#sched-seg button').forEach(b => b.classList.toggle('active', sched.includes(+b.dataset.wd)));
+}
+document.querySelectorAll('#sched-seg button').forEach(b => b.addEventListener('click', () => {
+  if (!state.plan) { toast('no active plan — accept one first.', true); return; }
+  const wd = +b.dataset.wd;
+  let s = state.plan.schedule || [];
+  s = s.includes(wd) ? s.filter(x => x !== wd) : [...s, wd].sort();
+  state.plan.schedule = s.length ? s : null;
+  save(); renderSchedSeg(); renderView();
+}));
 document.getElementById('settings-btn').addEventListener('click', openSettings);
 document.getElementById('settings-gear').addEventListener('click', openSettings);
 document.getElementById('sync-pip').addEventListener('click', openSettings);
@@ -2406,7 +2651,10 @@ document.getElementById('rest-default').addEventListener('change', e => {
 });
 document.getElementById('claude-rules').addEventListener('input', e => { state.settings.claudeRules = e.target.value; save(); });
 document.getElementById('program-note').addEventListener('input', e => { state.settings.claude.programNote = e.target.value; save(); });
-document.getElementById('equipment').addEventListener('input', e => { state.settings.claude.equipment = e.target.value; save(); });
+document.getElementById('equipment').addEventListener('input', e => {
+  state.settings.claude.equipment = e.target.value; save();
+  try { localStorage.removeItem('cuaderno.exdb.v2'); } catch (err) {}   // demo matching is equipment-aware — recompute
+});
 document.getElementById('claude-model').addEventListener('change', e => { state.settings.claude.model = e.target.value; save(); });
 document.getElementById('claude-save-btn').addEventListener('click', () => {
   const key = document.getElementById('claude-api-key').value.trim();
@@ -2474,7 +2722,10 @@ async function syncPull(force = false) {
       const preservedWorkout = state.activeWorkout;   // never let a remote pull kill a live workout
       state = migrate(remoteState);
       state.settings.sync = preservedSync;
-      state.settings.claude = { ...state.settings.claude, ...preservedClaude };
+      // only the SECRETS are device-local; content fields (model, programNote, equipment) follow
+      // last-write-wins like the rest of the state — preserving the whole object made a stale
+      // device silently clobber equipment/notes set elsewhere
+      state.settings.claude = { ...state.settings.claude, apiKey: preservedClaude.apiKey, enabled: preservedClaude.enabled };
       if (preservedWorkout && sessionById(preservedWorkout.sessionId)) state.activeWorkout = preservedWorkout;
       state.settings.sync.lastSyncedAt = Date.now();
       suppressSync = true; save({ markModified: false, push: false }); suppressSync = false;
@@ -2571,7 +2822,7 @@ document.getElementById('import-file').addEventListener('change', async e => {
     const preservedClaude = state.settings.claude;
     state = migrate(parsed);
     state.settings.sync = preservedSync;
-    state.settings.claude = { ...state.settings.claude, ...preservedClaude };
+    state.settings.claude = { ...state.settings.claude, apiKey: preservedClaude.apiKey, enabled: preservedClaude.enabled };   // same secrets-only preserve as syncPull
     save(); renderAll(); toast('imported.');
   } catch (err) { toast('import failed: ' + err.message, true); }
   e.target.value = '';

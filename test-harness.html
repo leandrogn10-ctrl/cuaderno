@@ -24,7 +24,7 @@ function seedExdb() {
   const names = ['squat', 'bench press', 'deadlift', 'overhead press', 'barbell row', 'pull up'];
   const map = {};
   for (const n of names) map[n] = { imgs: [GIF, GIF], instructions: ['Step one.', 'Step two.'] };
-  W().localStorage.setItem('cuaderno.exdb.v1', JSON.stringify(map));
+  W().localStorage.setItem('cuaderno.exdb.v2', JSON.stringify(map));
 }
 async function loadApp() {
   f.src = 'index.html';
@@ -164,12 +164,14 @@ async function loadApp() {
     log('plan cursor advanced', state().plan.cursor === 1, 'cursor=' + state().plan.cursor);
     q('[data-act="goto-home"]').click(); await sleep(300);
 
-    // ── timed sets: plank with a hold countdown ──
-    W().acceptPlan({ type: 'plan', name: 'TEST TIMED', days: [
+    // ── timed sets: plank with a hold countdown (+ schedule → NEXT line) ──
+    W().acceptPlan({ type: 'plan', name: 'TEST TIMED', schedule: ['mon', 'tue', 'thu', 'fri'], days: [
       { name: 'CORE', exercises: [{ name: 'Plank', sets: 1, seconds: 45, videoQuery: 'plank' }] },
     ]});
     await sleep(400);
     log('timed: plan card shows 1×45s', /1×45s/.test(q('.plan-card')?.textContent || ''), JSON.stringify((q('.plan-card')?.textContent || '').slice(0, 120)));
+    log('schedule: parsed to JS weekdays', JSON.stringify(state().plan.schedule) === '[1,2,4,5]', JSON.stringify(state().plan.schedule));
+    log('schedule: home shows NEXT line', /NEXT: (TODAY|TOMORROW|MONDAY|TUESDAY|THURSDAY|FRIDAY) · /.test(q('.plan-next')?.textContent || ''), q('.plan-next')?.textContent);
     q('[data-act="start-workout"]').click();
     await sleep(400);
     log('timed: brief row shows 45s target', /45s/.test(q('.brief-row .t')?.textContent || ''));
@@ -193,6 +195,18 @@ async function loadApp() {
         JSON.stringify(plankEn?.sets[0] || null));
     log('timed: last set → summary', D().body.dataset.view === 'summary');
     q('[data-act="goto-home"]').click(); await sleep(300);
+
+    // ── check-in: any-time "how do I feel" log from home ──
+    log('checkin: home offers ♥ check-in', !!q('[data-act="log-checkin"]'));
+    q('[data-act="log-checkin"]').click();
+    await sleep(300);
+    log('checkin: modal opens in check-in mode', D().getElementById('debrief-modal').open && D().getElementById('db-title').textContent === 'Check-in');
+    log('checkin: mic language toggle present (en-US default)', !!q('#mic-lang-seg') && state().settings.micLang === 'en-US');
+    D().getElementById('db-text').value = 'Left shoulder is sore from yesterday, everything else fine.';
+    D().getElementById('db-send').click();
+    await sleep(400);
+    log('checkin: saved to state (no API key → stored anyway)', state().checkins?.length === 1 && state().checkins[0].text.includes('shoulder'));
+    log('checkin: home daylog shows it', /check-in/.test(q('.daylog')?.textContent || ''), (q('.daylog')?.textContent || '').slice(0, 80));
 
     // ── other screens intact ──
     W().nav('history'); await sleep(300);
