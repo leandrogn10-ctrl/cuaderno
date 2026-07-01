@@ -1,8 +1,9 @@
 <!DOCTYPE html>
 <!-- Cuaderno v4 deploy-gate harness: drives the Session Runner in an iframe; writes PASS/FAIL lines into #out.
-     Run: python3 -m http.server → chrome --headless --virtual-time-budget=25000 --dump-dom http://localhost:PORT/test-harness.html
+     Run: python3 -m http.server → chrome --headless --virtual-time-budget=40000 --dump-dom http://localhost:PORT/test-harness.html
      exdb is tested WITHOUT network by pre-seeding localStorage['cuaderno.exdb.v1']. -->
 <html>
+<head><meta charset="utf-8"></head>
 <body>
 <pre id="out"></pre>
 <iframe id="f" src="about:blank" style="width:400px;height:800px"></iframe>
@@ -135,7 +136,7 @@ async function loadApp() {
     await sleep(300);
     log('coach: full-screen overlay with inner scroller', !!q('.coach-wrap') && getComputedStyle(q('.coach-wrap')).position === 'fixed');
     log('coach: bottom tabs STAY visible (exit path)', getComputedStyle(q('#bottom-tabs')).display !== 'none');
-    log('coach: chips render', D().querySelectorAll('#coach-chips [data-chip]').length === 4);
+    log('coach: chips render', D().querySelectorAll('#coach-chips [data-chip]').length === 5);
     log('coach: dock input present', !!q('#coach-dock #coach-text'));
     log('offline: prefetch fn + settings button wired', typeof W().offlinePrefetch === 'function' && !!D().getElementById('offline-prep-btn'));
     q('#coach-chips [data-chip="0"]').click();
@@ -161,6 +162,36 @@ async function loadApp() {
     q('[data-act="done-set"]').click(); await sleep(500);
     log('plan day: finished via runner → summary', D().body.dataset.view === 'summary');
     log('plan cursor advanced', state().plan.cursor === 1, 'cursor=' + state().plan.cursor);
+    q('[data-act="goto-home"]').click(); await sleep(300);
+
+    // ── timed sets: plank with a hold countdown ──
+    W().acceptPlan({ type: 'plan', name: 'TEST TIMED', days: [
+      { name: 'CORE', exercises: [{ name: 'Plank', sets: 1, seconds: 45, videoQuery: 'plank' }] },
+    ]});
+    await sleep(400);
+    log('timed: plan card shows 1×45s', /1×45s/.test(q('.plan-card')?.textContent || ''), JSON.stringify((q('.plan-card')?.textContent || '').slice(0, 120)));
+    q('[data-act="start-workout"]').click();
+    await sleep(400);
+    log('timed: brief row shows 45s target', /45s/.test(q('.brief-row .t')?.textContent || ''));
+    q('[data-act="lets-go"]').click();
+    await sleep(4800); W().wkTick(); await sleep(200);
+    log('timed: set screen offers START HOLD', aw().mode === 'set' && !!q('[data-act="start-hold"]'), 'mode=' + aw()?.mode);
+    log('timed: SEC input replaces reps', !!q('input[data-fld="s"]'));
+    q('[data-act="start-hold"]').click();
+    await sleep(300);
+    log('timed: hold armed, countdown button live', !!aw().hold && !!q('[data-act="finish-hold"]'));
+    await loadApp();   // mid-hold reload → countdown survives
+    log('timed: hold survives reload', !!aw().hold && !!q('[data-act="finish-hold"]'));
+    await sleep(1200);
+    q('[data-act="finish-hold"]').click();   // end early → logs actual seconds held
+    await sleep(500);
+    const stT = state();
+    const plankEx = stT.exercises.find(x => x.name === 'Plank');
+    const plankEn = stT.sessions[0].entries.find(e => e.exerciseId === plankEx?.id);
+    log('timed: hold logged as seconds (no reps, no NaN volume)',
+        !!plankEn && plankEn.sets.length === 1 && plankEn.sets[0].sec >= 1 && plankEn.sets[0].r === undefined && Number.isFinite(W().sessionVol(stT.sessions[0])),
+        JSON.stringify(plankEn?.sets[0] || null));
+    log('timed: last set → summary', D().body.dataset.view === 'summary');
     q('[data-act="goto-home"]').click(); await sleep(300);
 
     // ── other screens intact ──

@@ -1,6 +1,6 @@
 // El Cuaderno service worker — offline-first shell + runtime caches for fonts and exercise media.
 // Bump CACHE_NAME to force-refresh clients; FONT/MEDIA caches survive bumps (immutable assets).
-const CACHE_NAME = 'cuaderno-v7';
+const CACHE_NAME = 'cuaderno-v8';
 const FONT_CACHE = 'cuaderno-fonts-v1';
 const MEDIA_CACHE = 'cuaderno-media-v1';
 const KEEP_CACHES = [CACHE_NAME, FONT_CACHE, MEDIA_CACHE];
