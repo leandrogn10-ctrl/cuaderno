@@ -2251,8 +2251,77 @@ async function coachSend() {
 }
 
 /* ── Claude plumbing (shell; chat variant with history) ── */
-function isClaudeEnabled() { return !!(state.settings.claude.enabled && state.settings.claude.apiKey); }
+// Max-subscription path: the same local helper LeandroOS and Bitácora use
+// (~/.leandro-os/los-music-helper.py, a launchd agent). It shells the logged-in Claude Code CLI
+// with ANTHROPIC_API_KEY stripped, so the coach bills the Max plan instead of API credits.
+// Reachable from file:// and from the deployed Pages origin, which the helper grants a SCOPED
+// token good only for /claude/* — never /project/*. Anywhere else (the phone, where 127.0.0.1
+// is the phone itself) the 2.5s pair fails and we fall back to the API key.
+const LOS_HELPER_URL = 'http://127.0.0.1:17654';
+const LOS_REACHABLE = location.protocol === 'file:' ||
+                      location.origin === 'https://leandrogn10-ctrl.github.io';
+let losToken = null, losTokenPromise = null;
+function losPair() {
+  if (losToken !== null) return Promise.resolve(losToken);
+  if (losTokenPromise) return losTokenPromise;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 2500);   // fail fast — a missing helper must not stall the coach
+  losTokenPromise = fetch(LOS_HELPER_URL + '/pair', { cache: 'no-store', signal: ac.signal })
+    .then(r => r.json()).then(d => { losToken = (d && d.token) || ''; return losToken; })
+    .catch(e => { losTokenPromise = null; throw e; })
+    .finally(() => clearTimeout(timer));
+  return losTokenPromise;
+}
+// The CLI takes ONE prompt, so a multi-turn coach chat renders as a transcript.
+function losFlatten(messages) {
+  if (messages.length === 1) return messages[0].content;
+  return messages.map(m => (m.role === 'user' ? 'Leandro' : 'Coach') + ': ' + m.content).join('\n\n');
+}
+function losModelAlias(id) {
+  const t = (id || '').toLowerCase();
+  return t.includes('opus') ? 'opus' : t.includes('haiku') ? 'haiku' : 'sonnet';
+}
+async function callClaudeSub(messages, maxTokens) {
+  const tok = await losPair();
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 90000);   // matches the helper's own bound
+  let res;
+  try {
+    res = await fetch(LOS_HELPER_URL + '/claude', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-LOS-Token': tok || '' },
+      body: JSON.stringify({ system: appBuildClaudeSystem(), prompt: losFlatten(messages),
+                             model: losModelAlias(state.settings.claude.model), max_tokens: maxTokens }),
+      signal: ac.signal,
+    });
+  } finally { clearTimeout(timer); }
+  if (!res.ok || !res.body) throw new Error('helper HTTP ' + res.status);
+  const reader = res.body.getReader(), dec = new TextDecoder();
+  let buf = '', text = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let idx;
+    while ((idx = buf.indexOf('\n\n')) >= 0) {
+      const line = buf.slice(0, idx).trim(); buf = buf.slice(idx + 2);
+      if (line.indexOf('data:') !== 0) continue;
+      const payload = line.slice(5).trim(); if (!payload) continue;
+      let ev; try { ev = JSON.parse(payload); } catch { continue; }
+      if (ev.t != null) text += ev.t;
+      else if (ev.error) throw new Error(ev.error);
+      else if (ev.done) return text;
+    }
+  }
+  return text;
+}
+// Sub mode counts as "enabled" — a reachable helper means no API key is required.
+function isClaudeEnabled() { return !!(state.settings.claude.enabled && (state.settings.claude.apiKey || LOS_REACHABLE)); }
 async function callClaudeChat(messages, maxTokens = 1400) {
+  if (LOS_REACHABLE) {
+    try { return await callClaudeSub(messages, maxTokens); }
+    catch (e) { console.warn('[coach] sub mode unavailable, falling back to the API key:', e.message); }
+  }
+  if (!state.settings.claude.apiKey) throw new Error('no api key, and the Max-subscription helper is unreachable');
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': state.settings.claude.apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
