@@ -7,13 +7,17 @@ input=$(cat)
 [[ $(printf '%s' "$input" | jq -r '.stop_hook_active // false') == "true" ]] && exit 0
 
 cd "$CLAUDE_PROJECT_DIR" || exit 0
+. "$HOME/.leandro-os/bin/caja.sh" 2>/dev/null || caja() { :; }
+CAJA_SRC="cuaderno"
 BASE=HEAD
 git rev-parse --verify -q '@{u}' >/dev/null 2>&1 && BASE='@{u}'
 git diff --quiet "$BASE" -- index.html 2>/dev/null && exit 0
 
 if ! git diff "$BASE" -- sw.js 2>/dev/null | grep -q '^[+-].*CACHE_NAME'; then
+  caja guard.block '{"rule":"sw-cache-bump"}' error
   echo "SHIP RULE: index.html changed (vs $BASE) but sw.js CACHE_NAME is unbumped — clients will pin the old shell. Bump it if you made this change; if it predates your turn (Leandro's in-progress edit), do NOT bump — flag it to him." >&2
   exit 2
 fi
+caja guard.warn '{"rule":"deploy-gate-reminder"}' warn
 echo "DEPLOY GATE REMINDER (not an error): index.html changed. Before any push, every HARNESS: line in test-harness.html must PASS — run it headless, don't eyeball. If this change touches sync/SW/callClaude/settings blocks, it must stay structurally identical to app-shell/shell.html. Acknowledge to Leandro, then end the turn." >&2
 exit 2
