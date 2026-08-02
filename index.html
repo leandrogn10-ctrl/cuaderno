@@ -764,6 +764,31 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
 
 /* ═══ shell plumbing + SLOT:APP-LOGIC (El Cuaderno v2 — router + active workout) ═══ */
 
+/* ── LA CAJA NEGRA — estate flight-recorder emitter (plumbing; no slot — ports verbatim).
+   losLog/losWarn/losErr(evt,data) batch-POST to the Mac helper's /log ring; off-Mac (phone
+   PWA) the fetch fails silently. src derives from APP.shortName, so a ported app reports as
+   itself with zero edits. Never throws. See leandro-os-prototype/HANDOFF.md § LA CAJA NEGRA. ── */
+(() => {
+  const SRC = (window.APP && APP.shortName ? APP.shortName : 'app').toLowerCase();
+  const SINK = 'http://127.0.0.1:17654/log';
+  let buf = [], timer = null, lastKey = null, lastE = null;
+  const flush = () => { timer = null; if (!buf.length) return; const b = buf; buf = []; lastKey = lastE = null;
+    try { fetch(SINK, { method: 'POST', body: JSON.stringify({ src: SRC, entries: b }), keepalive: true }).catch(() => {}); } catch (e) {} };
+  const push = (lvl, evt, data) => { try {
+    const e = { ts: Date.now(), lvl, evt: String(evt).slice(0, 80) }; let ds = '';
+    if (data != null) { try { ds = JSON.stringify(data) || ''; e.data = ds.length > 600 ? ds.slice(0, 600) + '…' : data; } catch (_) { e.data = String(data).slice(0, 600); } }
+    const key = lvl + '|' + e.evt + '|' + ds;
+    if (key === lastKey && lastE) { lastE.n = (lastE.n || 1) + 1; return; }   // repeat-suppress: a hot error → 1 line + a count
+    if (buf.length >= 200) return;
+    buf.push(e); lastKey = key; lastE = e;
+    if (!timer) timer = setTimeout(flush, 8000);
+  } catch (_) {} };
+  window.addEventListener('error', ev => push('error', 'js.error', { msg: String(ev.message || '').slice(0, 200), at: String(ev.filename || '').split('/').pop() + ':' + (ev.lineno || 0) }));
+  window.addEventListener('unhandledrejection', ev => { const r = ev && ev.reason; push('error', 'js.rejection', { msg: String((r && (r.message || r)) || '').slice(0, 200) }); });
+  window.addEventListener('pagehide', () => flush());
+  window.losLog = (e, d) => push('info', e, d); window.losWarn = (e, d) => push('warn', e, d); window.losErr = (e, d) => push('error', e, d);
+})();
+
 const STORAGE_KEY = APP.STORAGE_KEY;
 const GIST_FILENAME = APP.GIST_FILENAME;
 const DEFAULT_CLAUDE_RULES = `You are Coach inside La Forja, Leandro's training log. Be direct, technical, motivating without cheerleading. Short answers. Push progressive overload but respect recovery and the program note. Never invent training history — use only the context given.`;
