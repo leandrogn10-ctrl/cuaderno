@@ -2330,8 +2330,15 @@ async function coachSend() {
 // token good only for /claude/* — never /project/*. Anywhere else (the phone, where 127.0.0.1
 // is the phone itself) the 2.5s pair fails and we fall back to the API key.
 const LOS_HELPER_URL = 'http://127.0.0.1:17654';
-const LOS_REACHABLE = location.protocol === 'file:' ||
-                      location.origin === 'https://leandrogn10-ctrl.github.io';
+// A function, not a const — hoisted. Its consumers (canUseSub → isClaudeEnabled) are reachable
+// from code that sits ABOVE this line, and a const is in its TDZ until its own line runs: any such
+// call at load time throws "Cannot access 'LOS_REACHABLE' before initialization" and the app renders
+// an empty pane. It doesn't throw today only because every earlier call site happens to be inside a
+// deferred handler — that's an accident of line order, not a design. The other four forks (shell,
+// bitácora, archivo, lámpara) all use this form. Invisible to `node --check`.
+function losReachable() {
+  return location.protocol === 'file:' || location.origin === 'https://leandrogn10-ctrl.github.io';
+}
 let losToken = null, losTokenPromise = null;
 function losPair() {
   if (losToken !== null) return Promise.resolve(losToken);
@@ -2387,7 +2394,7 @@ async function callClaudeSub(messages, maxTokens) {
 }
 // Which billing path a call may take, given the setting and where we're running.
 function claudeMode() { return state.settings.claude.mode || 'auto'; }
-function canUseSub() { return claudeMode() !== 'api' && LOS_REACHABLE; }
+function canUseSub() { return claudeMode() !== 'api' && losReachable(); }
 function canUseApi()  { return claudeMode() !== 'sub' && !!state.settings.claude.apiKey; }
 // Last path that actually served a reply, for the Setup readout. Not persisted — it describes
 // this tab's session, and a stale value across a reload would be a lie.
@@ -2848,7 +2855,7 @@ function renderClaudeStatus() {
   // missing: 'auto' can silently swap paths, and only a served-by readout makes that visible.
   const plan = mode === 'sub' ? 'Max plan only'
              : mode === 'api' ? 'API key only'
-             : (LOS_REACHABLE ? 'auto · Max plan, key as backup' : 'auto · key (helper unreachable here)');
+             : (losReachable() ? 'auto · Max plan, key as backup' : 'auto · key (helper unreachable here)');
   const via = CLAUDE_VIA === 'sub' ? ' · last reply: Max plan'
             : CLAUDE_VIA === 'api' ? ' · last reply: API key' : '';
   el.textContent = `enabled · ${claudeTier(state.settings.claude.model)} · ${plan}${via}`;
