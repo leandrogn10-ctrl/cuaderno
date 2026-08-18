@@ -692,11 +692,8 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
         <div class="form-grid">
           <label class="span-2">Anthropic API key<input type="password" id="claude-api-key" placeholder="sk-ant-..." autocomplete="off"></label>
           <label>Model
-            <select id="claude-model">
-              <option value="claude-haiku-4-5">Haiku — fast &amp; cheap</option>
-              <option value="claude-sonnet-5">Sonnet — balanced</option>
-              <option value="claude-opus-5">Opus — best, slowest</option>
-            </select>
+            <!-- Options are BUILT from CLAUDE_MODELS, never hand-written here — see populateClaudeModelSelect(). -->
+            <select id="claude-model"></select>
           </label>
           <label>Billing
             <select id="claude-mode">
@@ -841,6 +838,19 @@ function looksLikeMyState(s) {
 }
 
 /* ── state skeleton (shell) ── */
+// The ONE list of model ids this app may send. The <select> is built from it and resolveClaudeModel()
+// refuses everything outside it, so the dropdown and the stored value cannot drift apart. Pinned ids
+// only, never a bare alias: an alias follows whatever the CLI calls current, so the model changes
+// with no diff, no log line and no failing test.
+const CLAUDE_MODELS = [
+  { id: 'claude-haiku-4-5', tier: 'haiku 4.5', label: 'Haiku — fast & cheap' },
+  { id: 'claude-sonnet-5',  tier: 'sonnet 5',  label: 'Sonnet — balanced' },
+  { id: 'claude-opus-5',    tier: 'opus 5',    label: 'Opus — best, slowest' },
+];
+// Spelled out rather than taken as CLAUDE_MODELS[0]: unlike the other apps, cuaderno's default is
+// NOT the first entry in its dropdown — sonnet is the default, haiku just sorts first. Reading the
+// default off the list order here would quietly demote every new install to haiku.
+const CLAUDE_MODEL_DEFAULT = 'claude-sonnet-5';
 // Legacy → current model ids. Declared beside migrate() (its only consumer) so it can't be read
 // before this line runs. Add a row whenever the option list moves.
 const CLAUDE_MODEL_MIGRATIONS = {
@@ -850,14 +860,28 @@ const CLAUDE_MODEL_MIGRATIONS = {
   'claude-opus-4-8': 'claude-opus-5',
   'sonnet': 'claude-sonnet-5', 'opus': 'claude-opus-5', 'haiku': 'claude-haiku-4-5',
 };
+// Migrate what we recognize, then REFUSE what's left. The table alone can't be the whole guard:
+// it only knows ids that existed when it was written, so any other string — a bare alias from an
+// ancient gist, a typo, a model a newer build introduced — would ride through as a legal string
+// straight into the request body. Anything not in CLAUDE_MODELS falls back to the default.
+// Trade-off, stated on purpose: a newer id synced from a device running a newer build gets reset
+// here. That's deliberate — this build has no dropdown entry for it and couldn't honor it anyway.
+function resolveClaudeModel(id) {
+  const m = CLAUDE_MODEL_MIGRATIONS[id] || id;
+  return CLAUDE_MODELS.some(x => x.id === m) ? m : CLAUDE_MODEL_DEFAULT;
+}
+// `split('-')[1]` printed "haiku" for BOTH claude-haiku-4-5 and claude-haiku-4-5-20251001, so a
+// fork could sit on the wrong spelling for months and still look right in the status line. Print
+// the tier from the list, and an unrecognized id verbatim so it reads as wrong on sight.
+function claudeTier(id) { return (CLAUDE_MODELS.find(m => m.id === id) || {}).tier || id; }
 function migrate(s) {
   s.settings = s.settings || {};
   s.settings.claudeRules = s.settings.claudeRules ?? DEFAULT_CLAUDE_RULES;
   s.settings.sync = s.settings.sync || { enabled: false, githubPat: null, gistId: null, lastSyncedAt: null };
-  s.settings.claude = s.settings.claude || { enabled: false, apiKey: null, model: 'claude-sonnet-5' };
+  s.settings.claude = s.settings.claude || { enabled: false, apiKey: null, model: CLAUDE_MODEL_DEFAULT };
   // A model id stored before the option list moved is still a legal STRING — merging restores it
   // untouched and it flows straight to the API, silently exempt from the current set.
-  s.settings.claude.model = CLAUDE_MODEL_MIGRATIONS[s.settings.claude.model] || s.settings.claude.model || 'claude-sonnet-5';
+  s.settings.claude.model = resolveClaudeModel(s.settings.claude.model);
   // Billing path. Added after `claude` existed, so a restored pre-mode snapshot lands here with
   // mode === undefined — merge over the default rather than trusting the saved object wholesale.
   // 'auto' reproduces the old silent-fallback behavior, so old saves keep behaving as before.
@@ -2741,12 +2765,20 @@ async function editExercise(exId) {
 
 /* ═══ settings wiring (shell + units + rest + program note) ═══ */
 const settingsModal = document.getElementById('settings-modal');
+// Two hand-kept copies of the same list is how a dated id can outlive its own migration row, so the
+// markup ships an empty <select> and the options come from CLAUDE_MODELS. new Option() sets the
+// label as text, so an "&" in a label needs no escaping.
+function populateClaudeModelSelect() {
+  const sel = document.getElementById('claude-model');
+  if (sel) sel.replaceChildren(...CLAUDE_MODELS.map(m => new Option(m.label, m.id)));
+}
 function openSettings() {
   document.getElementById('claude-rules').value = state.settings.claudeRules || DEFAULT_CLAUDE_RULES;
   document.getElementById('program-note').value = state.settings.claude.programNote || '';
   document.getElementById('equipment').value = state.settings.claude.equipment || '';
   document.getElementById('claude-api-key').value = state.settings.claude.apiKey || '';
-  document.getElementById('claude-model').value = state.settings.claude.model || 'claude-sonnet-5';
+  populateClaudeModelSelect();
+  document.getElementById('claude-model').value = resolveClaudeModel(state.settings.claude.model);
   document.getElementById('claude-mode').value = claudeMode();
   document.getElementById('sync-pat').value = state.settings.sync.githubPat || '';
   document.getElementById('sync-gist-id').value = state.settings.sync.gistId || '';
@@ -2819,7 +2851,7 @@ function renderClaudeStatus() {
              : (LOS_REACHABLE ? 'auto · Max plan, key as backup' : 'auto · key (helper unreachable here)');
   const via = CLAUDE_VIA === 'sub' ? ' · last reply: Max plan'
             : CLAUDE_VIA === 'api' ? ' · last reply: API key' : '';
-  el.textContent = `enabled · ${state.settings.claude.model.split('-')[1]} · ${plan}${via}`;
+  el.textContent = `enabled · ${claudeTier(state.settings.claude.model)} · ${plan}${via}`;
   el.className = 'sync-status ok';
 }
 
