@@ -15,6 +15,13 @@ plumbing (gist sync, theme system, `callClaude`, `looksLikeMyState`) and the man
 ## The load-bearing rules
 - **Deploy gate = the headless-Chrome harness.** Every `HARNESS:` line in `test-harness.html` must
   PASS before pushing. Run it headless; don't eyeball.
+- **Shipping `index.html` means bumping `CACHE_NAME` in `sw.js`, same commit.** `APP_SHELL` caches
+  `index.html` offline-first, so an installed copy keeps serving the old shell and a correct fix
+  reads as NOT APPLIED — indistinguishable from never having pushed. And a green harness on
+  `localhost` is a fact about YOUR server: the deploy isn't verified until you `curl` the Pages URL
+  and grep the SERVED bytes for the string you just added. (11-sep: the coach's Max-plan gate was
+  fixed, verified on `localhost:8731`, and left uncommitted — Leandro kept getting "add your API key
+  in settings first" from a deploy nobody had touched.)
 - **Shell plumbing fixes are backported by hand** from `app-shell/shell.html` — keep the sync/SW/
   Claude/settings blocks structurally identical so the diffs stay small.
 - **Persistence discipline**: a schema change is invisible to a returning user unless stale
