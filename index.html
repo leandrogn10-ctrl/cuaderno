@@ -2395,12 +2395,18 @@ async function callClaudeSub(messages, maxTokens) {
 // Which billing path a call may take, given the setting and where we're running.
 function claudeMode() { return state.settings.claude.mode || 'auto'; }
 function canUseSub() { return claudeMode() !== 'api' && losReachable(); }
-function canUseApi()  { return claudeMode() !== 'sub' && !!state.settings.claude.apiKey; }
+// `enabled` guards the API path ONLY — the Save-key button sets it, Forget-key clears it, and
+// nothing else ever writes it. It has always been an API-KEY flag wearing a "Claude is on" name.
+function canUseApi()  { return claudeMode() !== 'sub' && !!state.settings.claude.enabled && !!state.settings.claude.apiKey; }
 // Last path that actually served a reply, for the Setup readout. Not persisted — it describes
 // this tab's session, and a stale value across a reload would be a lie.
 let CLAUDE_VIA = null;
-// Sub mode counts as "enabled" — a reachable helper means no API key is required.
-function isClaudeEnabled() { return !!(state.settings.claude.enabled && (canUseApi() || canUseSub())); }
+// Sub mode counts as "enabled" — a reachable helper means no API key is required. That is what the
+// comment said for months while the code ANDed in `enabled`, which only the Save-key button sets:
+// on a device where no key had ever been pasted the Max-plan route was unreachable BY CONSTRUCTION
+// and the coach answered "add your API key in settings first" with a live helper sitting right there.
+// To turn the coach off on the Mac now: Billing → "API key only" (with no key saved).
+function isClaudeEnabled() { return canUseApi() || canUseSub(); }
 async function callClaudeChat(messages, maxTokens = 1400) {
   if (canUseSub()) {
     try { const t = await callClaudeSub(messages, maxTokens); CLAUDE_VIA = 'sub'; renderClaudeStatus(); return t; }

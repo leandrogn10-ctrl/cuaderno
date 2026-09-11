@@ -143,6 +143,34 @@ async function loadApp() {
     await sleep(200);
     log('coach: chip stuffs a real prompt (send blocked w/o key)', (q('#coach-text').value || '').toLowerCase().includes('program'));
 
+    // ── coach gate: a REACHABLE Max-plan helper is sufficient on its own ──
+    // The regression this exists for: isClaudeEnabled() ANDed in state.settings.claude.enabled,
+    // which nothing but the Save-key button ever sets. On a device where no key had ever been
+    // pasted the helper path was unreachable BY CONSTRUCTION, and the coach answered "add your API
+    // key in settings first" with a live helper on 127.0.0.1. losReachable() is false at
+    // localhost, so the sub path is stubbed in — and restored in the finally.
+    const realReach = W().losReachable;
+    const modeSel = D().getElementById('claude-mode');
+    const setMode = m => { modeSel.value = m; modeSel.dispatchEvent(new (W().Event)('change')); };
+    try {
+      log('gate: helper unreachable (localhost) + no key → disabled', W().isClaudeEnabled() === false);
+      W().losReachable = () => true;
+      setMode('auto');
+      log('gate: reachable helper ALONE enables the coach, no API key', W().isClaudeEnabled() === true);
+      // RED CONTROL — re-plant the original gate at the same reads, under the same stub, and prove
+      // it FAILS the assertion above. Without this, the line passes for any always-true expression.
+      const planted = !!(state().settings.claude.enabled && (W().canUseApi() || W().canUseSub()));
+      log('gate CONTROL: the old `enabled &&` gate reproduces the bug', planted === false, 'planted=' + planted);
+      setMode('api');
+      log('gate: Billing "API key only" + no key → still disabled', W().isClaudeEnabled() === false);
+      setMode('sub');
+      log('gate: Billing "Max plan only" + reachable → enabled', W().isClaudeEnabled() === true);
+    } finally {
+      W().losReachable = realReach;
+      setMode('auto');
+    }
+    log('gate: losReachable restored → disabled again at localhost', W().isClaudeEnabled() === false);
+
     // ── plan lifecycle through the runner ──
     W().acceptPlan({ type: 'plan', name: 'TEST UL', days: [
       { name: 'UPPER', exercises: [{ name: 'Bench Press', sets: 2, reps: 5, startWeight: 100, videoQuery: 'bench' }] },
