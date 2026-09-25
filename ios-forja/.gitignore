@@ -1,0 +1,7 @@
+# Derived from ../index.html by build-forja.py on every build and re-sign; committing it would put a
+# second, staler copy of the whole app in the repo. `build-forja.py --check` is the drift gate.
+Resources/app/
+# The demo-image download cache (public-domain free-exercise-db frames); rebuilt on demand.
+.exdb-cache/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/

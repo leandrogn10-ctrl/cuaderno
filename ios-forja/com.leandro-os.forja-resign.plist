@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Install with:
+       cp ios-forja/com.leandro-os.forja-resign.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.leandro-os.forja-resign.plist
+     Verify in launchd's OWN view, not the file — the file is what you wrote, the print is what fires:
+       launchctl print gui/$(id -u)/com.leandro-os.forja-resign
+     Two runs a day, TEN MINUTES after El Quiosco and Bitácora so the three never build at once: the failure mode isn't "3am is wrong", it's that ONE run
+     gets exactly one shot at catching the phone awake. The script is idempotent and only mints a
+     profile under 3 days, so the second run costs a rebuild and nothing else. -->
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.leandro-os.forja-resign</string>
+  <key>ProgramArguments</key><array>
+    <string>/bin/bash</string>
+    <string>/Users/leandroguevara/Projects/cuaderno/ios-forja/resign.sh</string>
+  </array>
+  <key>StartCalendarInterval</key><array>
+    <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>50</integer></dict>
+    <dict><key>Hour</key><integer>13</integer><key>Minute</key><integer>20</integer></dict>
+  </array>
+  <key>StandardOutPath</key><string>/Users/leandroguevara/.leandro-os/forja-resign.out</string>
+  <key>StandardErrorPath</key><string>/Users/leandroguevara/.leandro-os/forja-resign.out</string>
+</dict></plist>

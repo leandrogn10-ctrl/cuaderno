@@ -27,6 +27,14 @@ plumbing (gist sync, theme system, `callClaude`, `looksLikeMyState`) and the man
 - Demo photos are relit (grayscale + ember multiply) so bright studio shots don't fight the screen.
 - One theme only (`forge`); volt/reactor are retired and migrate to it.
 
+## The iOS app — `ios-forja/`
+A free-signed native wrapper whose payload is DERIVED from `index.html` (`build-forja.py`, asserted
+anchors). Native only for what a page cannot do: the debrief mic (the Web Speech API does not exist
+in WKWebView — Chrome on iPhone included), rest notifications to a locked phone, keep-awake, haptics,
+the vault, bundled fonts and demos. Its gate is `ios-forja/gate.sh`; read `ios-forja/README.md` before
+touching it. A change to `setupDebriefMic`, the storage key, the exdb URL constants or the SW guard
+must keep `ios-forja/gate.sh` green — the builder and `test-bridge.js` read those by name.
+
 ## The gym and the catalog (schema 2)
 - `GEAR_DEFAULTS` is the building gym (from photos, 2026-09-25); `state.gear` overlays it per device
   choice (have / unit / step). Coach programs only `have:true` gear, and `acceptPlan`/`planWarnings`

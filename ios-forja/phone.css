@@ -1,0 +1,19 @@
+/*  phone.css — what the APP adds on top of index.html's own phone layer. Injected LAST in <head>,
+    after the app's <style>, so equal-specificity rules here win by order (build-forja.py places it;
+    the placement is load-bearing).
+
+    Scope: only what a web page cannot do for itself, or a fix for something wrong ONLY inside a
+    webview. Not a second design system — the forge lives in index.html. */
+
+/* ── 1. Fonts, bundled — a gym basement has no signal. Family names match index.html's stacks
+   EXACTLY; that is the whole contract. JetBrains Mono ships Regular only: 500/700 render as
+   synthetic bold, a small, deliberate difference from the web build. */
+@font-face { font-family: 'Instrument Serif'; font-style: normal; font-weight: 400; font-display: block; src: url('fonts/InstrumentSerif-Regular.ttf') format('truetype'); }
+@font-face { font-family: 'Instrument Serif'; font-style: italic; font-weight: 400; font-display: block; src: url('fonts/InstrumentSerif-Italic.ttf') format('truetype'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 400; font-display: block; src: url('fonts/JetBrainsMono-Regular.ttf') format('truetype'); }
+
+/* ── 2. The tells that give a webview away ── */
+* { -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; }
+body { -webkit-user-select: none; user-select: none; touch-action: manipulation; overscroll-behavior: none; }
+/* …but his own words stay selectable: debriefs, check-ins, Coach's replies. */
+input, textarea, [contenteditable], .msg, .form-steps { -webkit-user-select: text; user-select: text; }
