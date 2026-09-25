@@ -64,8 +64,8 @@ async function loadApp() {
     log('count → set: auto-advanced', aw().mode === 'set' && !!q('.done-set-btn'));
     log('set: media animation (exdb) present', !!q('#media-flip'));
     log('set: ⓘ form steps available', !!q('[data-act="toggle-form"]'));
-    log('set: SET 1/N progress shown', /SET 1\//.test(q('.set-progress .sp')?.textContent || ''));
-    log('set: weight input prefilled', (q('.set-table input[data-fld="w"]')?.value || '').length > 0);
+    log('set: SET 1/N progress shown', /Set 1 of/.test(q('.set-progress .sp')?.textContent || ''));
+    log('set: weight input prefilled', (q('.player-body input[data-fld="w"]')?.value || '').length > 0);
 
     // reload mid-set → same screen, same cursor
     const cur0 = JSON.stringify(aw().cursor);
@@ -78,10 +78,10 @@ async function loadApp() {
     const st1 = state();
     log('3-tap prime directive: first set logged', st1.sessions[0]?.entries[0]?.sets.length === 1, JSON.stringify(st1.sessions[0]?.entries[0]?.sets[0] || null));
     log('rest: full-screen countdown', aw().mode === 'rest' && !!q('#rest-big'));
-    log('rest: UP NEXT card', !!q('.upnext-card') && /SET 2\//.test(q('.upnext-card .d')?.textContent || ''));
+    log('rest: UP NEXT card', !!q('.upnext-card') && /Set 2 of/.test(q('.upnext-card .d')?.textContent || ''));
     q('[data-act="rest-skip"]').click();
     await sleep(300);
-    log('rest SKIP → next set screen', aw().mode === 'set' && /SET 2\//.test(q('.set-progress .sp')?.textContent || ''));
+    log('rest SKIP → next set screen', aw().mode === 'set' && /Set 2 of/.test(q('.set-progress .sp')?.textContent || ''));
 
     // ── skip set → rest → skip → set 3 → DONE SET (last) → summary ──
     q('[data-act="skip-set"]').click();
@@ -90,7 +90,7 @@ async function loadApp() {
     log('skip set → rest screen', aw().mode === 'rest');
     q('[data-act="rest-skip"]').click();
     await sleep(300);
-    log('set 3 reached', /SET 3\//.test(q('.set-progress .sp')?.textContent || ''));
+    log('set 3 reached', /Set 3 of/.test(q('.set-progress .sp')?.textContent || ''));
     W().confirm = () => true;
     q('[data-act="done-set"]').click();                            // last undone row → finish
     await sleep(500);
@@ -101,7 +101,7 @@ async function loadApp() {
     q('[data-act="goto-home"]').click();
     await sleep(300);
     log('home feed shows the workout', D().body.dataset.view === 'home' && !!q('[data-act="open-session"]'));
-    log('home: streak strip shows n/goal', /\d+\/\d+/.test(q('.week-strip .l')?.textContent || ''), q('.week-strip .l')?.textContent);
+    log('home: streak strip shows n/goal', /\d+ of \d+/.test(q('.week-strip .l')?.textContent || ''), q('.week-strip .l')?.textContent);
 
     // ── debrief: home prompt → speak/type → saved on the session ──
     log('home: undebriefed session prompts 🎙', !!q('[data-act="debrief-session"]'));
@@ -179,11 +179,11 @@ async function loadApp() {
     log('plan accepted: card on home', !!q('.plan-card'));
     q('[data-act="start-workout"]').click();
     await sleep(400);
-    log('plan day: brief shows plan context', aw().mode === 'brief' && /UPPER/.test(q('.brief-sub')?.textContent || ''));
+    log('plan day: brief shows plan context', aw().mode === 'brief' && /Upper/.test(q('.brief-title')?.textContent || ''));
     q('[data-act="lets-go"]').click();
     await sleep(4800); W().wkTick(); await sleep(200);             // 3-2-1-GO (intervals don't fire in headless virtual time — drive the tick)
-    log('plan day: set screen @ target weight', aw().mode === 'set' && q('.set-table input[data-fld="w"]')?.value === '50',
-        `mode=${aw()?.mode} w=${q('.set-table input[data-fld="w"]')?.value}`);
+    log('plan day: set screen @ target weight', aw().mode === 'set' && q('.player-body input[data-fld="w"]')?.value === '50',
+        `mode=${aw()?.mode} w=${q('.player-body input[data-fld="w"]')?.value}`);
     q('[data-act="done-set"]').click(); await sleep(300);
     q('[data-act="rest-skip"]')?.click(); await sleep(300);
     q('[data-act="done-set"]').click(); await sleep(500);
@@ -196,9 +196,9 @@ async function loadApp() {
       { name: 'CORE', exercises: [{ name: 'Plank', sets: 1, seconds: 45, videoQuery: 'plank' }] },
     ]});
     await sleep(400);
-    log('timed: plan card shows 1×45s', /1×45s/.test(q('.plan-card')?.textContent || ''), JSON.stringify((q('.plan-card')?.textContent || '').slice(0, 120)));
+    log('timed: plan card shows 1×45s', /1 × 45s/.test(q('.plan-card')?.textContent || ''), JSON.stringify((q('.plan-card')?.textContent || '').slice(0, 120)));
     log('schedule: parsed to JS weekdays', JSON.stringify(state().plan.schedule) === '[1,2,4,5]', JSON.stringify(state().plan.schedule));
-    log('schedule: home shows NEXT line', /NEXT: (TODAY|TOMORROW|MONDAY|TUESDAY|THURSDAY|FRIDAY) · /.test(q('.plan-next')?.textContent || ''), q('.plan-next')?.textContent);
+    log('schedule: home shows NEXT line', /Next: (today|tomorrow|Monday|Tuesday|Thursday|Friday), /.test(q('.plan-next')?.textContent || ''), q('.plan-next')?.textContent);
     q('[data-act="start-workout"]').click();
     await sleep(400);
     log('timed: brief row shows 45s target', /45s/.test(q('.brief-row .t')?.textContent || ''));
@@ -254,23 +254,23 @@ async function loadApp() {
     log('plan: "DB Row" resolved to the ONE catalog exercise (no duplicate)', state().exercises.filter(e => e.cat === 'db-row').length === 1);
     q('[data-act="start-workout"]').click(); await sleep(400);
     q('[data-act="lets-go"]').click(); await sleep(4800); W().wkTick(); await sleep(200);
-    log('bw: a push-up has NO weight input', aw().mode === 'set' && !q('.set-table input[data-fld="w"]') && !!q('.set-table .bw-cell'), 'mode=' + aw()?.mode);
+    log('bw: a push-up has NO weight input', aw().mode === 'set' && !q('.player-body input[data-fld="w"]') && !!q('.player-body .bw-cell'), 'mode=' + aw()?.mode);
     q('[data-act="done-set"]').click(); await sleep(300);
     const puId = state().exercises.find(e => e.cat === 'push-up').id;
     const puSet = state().sessions.flatMap(s => s.entries).find(e => e.exerciseId === puId)?.sets.slice(-1)[0];
     log('bw: logged push-up carries 0, not 45', puSet?.w === 0 && puSet?.r === 10, JSON.stringify(puSet));
     q('[data-act="rest-skip"]')?.click(); await sleep(300);
-    log('ext: dumbbell row reads in LB with the plan\'s 30', /LB/.test(q('.set-table .unit-flip')?.textContent || '') && q('.set-table input[data-fld="w"]')?.value === '30',
-        (q('.set-table .unit-flip')?.textContent || '') + ' / ' + q('.set-table input[data-fld="w"]')?.value);
+    log('ext: dumbbell row reads in LB with the plan\'s 30', /lb/.test(q('.player-body .unit-flip')?.textContent || '') && q('.player-body input[data-fld="w"]')?.value === '30',
+        (q('.player-body .unit-flip')?.textContent || '') + ' / ' + q('.player-body input[data-fld="w"]')?.value);
     W().confirm = () => true;
-    q('.set-table .unit-flip').click(); await sleep(300);
-    log('unit flip: dumbbells now read KG, the pin number stays 30', /KG/.test(q('.set-table .unit-flip')?.textContent || '') && q('.set-table input[data-fld="w"]')?.value === '30',
-        (q('.set-table .unit-flip')?.textContent || '') + ' / ' + q('.set-table input[data-fld="w"]')?.value);
+    q('.player-body .unit-flip').click(); await sleep(300);
+    log('unit flip: dumbbells now read KG, the pin number stays 30', /kg/.test(q('.player-body .unit-flip')?.textContent || '') && q('.player-body input[data-fld="w"]')?.value === '30',
+        (q('.player-body .unit-flip')?.textContent || '') + ' / ' + q('.player-body input[data-fld="w"]')?.value);
     q('[data-act="done-set"]').click(); await sleep(500);
     const rowId = state().exercises.find(e => e.cat === 'db-row').id;
     const rowSet = state().sessions.flatMap(s => s.entries).find(e => e.exerciseId === rowId)?.sets.slice(-1)[0];
     log('unit flip: the set is stamped kg and stored as 30 kg in lbs', rowSet?.u === 'kg' && Math.abs(rowSet.w - 30 / 0.45359237) < 0.1, JSON.stringify(rowSet));
-    log('unit flip: history reads it back as 30 kg', W().fmtSet(rowSet, W().eval('exById')(rowId)) === '30×10', W().fmtSet(rowSet, W().eval('exById')(rowId)));
+    log('unit flip: history reads it back as 30 kg', W().fmtSet(rowSet, W().eval('exById')(rowId)) === '30 × 10', W().fmtSet(rowSet, W().eval('exById')(rowId)));
     W().setGearUnit('dumbbells', 'lb');
     q('[data-act="goto-home"]')?.click(); await sleep(300);
 
@@ -307,7 +307,7 @@ async function loadApp() {
       D().getElementById('db-mic').click(); await sleep(200);
       const st = D().getElementById('db-mic-status');
       log('mic: blocked permission is reported, not swallowed', !st.hidden && /blocked/.test(st.textContent), st.textContent);
-      log('mic: button resets after the failure', D().getElementById('db-mic').textContent.includes('record'));
+      log('mic: button resets after the failure', /record/i.test(D().getElementById('db-mic').textContent));
       W().SpeechRecognition = fakeSR('silent');
       W().openCheckin(); await sleep(100);                       // the modal binds the recognizer class when it opens
       D().getElementById('db-mic').click(); await sleep(200);

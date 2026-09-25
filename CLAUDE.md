@@ -14,6 +14,19 @@ plumbing (gist sync, theme system, `callClaude`, `looksLikeMyState`) and the man
   only**, via `CATALOG[].exdb`. Every pinned name was checked BY EYE against its two frames. Never
   reintroduce fuzzy matching: it shipped plausible, wrong pictures. No entry → a video search.
 
+## Identity — "the forge" (don't drift from this)
+- A smithy at night: **heat is work, cold is rest.** Colour appears only where there is heat and always
+  means the same thing: ember `--accent #ff5b1f` = what you're working now · white-hot `--hot #ffd7a3` =
+  the load in your hands, a PR · quench `--cool #7fb4d1` = rest. Ground is soot/iron (`--bg #17120f`).
+- Type: **Instrument Serif** (names, headings, the big numbers — the estate's shared voice with the city
+  and Bitácora) + **JetBrains Mono** (data only). Sentence case everywhere; no all-caps labels, no
+  emoji-as-icons. Coach's ALL-CAPS plan names are title-cased at display by `dispName()`.
+- The one bold moment is **strike → quench**: Done throws sparks (`sparkBurst`), and the rest number
+  cools from white-hot to steel via `--rest-heat`, written by the ticker from the real countdown.
+  `--heat` (per view/mode on `body`) drives the fire glow rising from the bottom edge.
+- Demo photos are relit (grayscale + ember multiply) so bright studio shots don't fight the screen.
+- One theme only (`forge`); volt/reactor are retired and migrate to it.
+
 ## The gym and the catalog (schema 2)
 - `GEAR_DEFAULTS` is the building gym (from photos, 2026-09-25); `state.gear` overlays it per device
   choice (have / unit / step). Coach programs only `have:true` gear, and `acceptPlan`/`planWarnings`
