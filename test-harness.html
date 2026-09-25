@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- Cuaderno v4 deploy-gate harness: drives the Session Runner in an iframe; writes PASS/FAIL lines into #out.
      Run: python3 -m http.server → chrome --headless --virtual-time-budget=40000 --dump-dom http://localhost:PORT/test-harness.html
-     exdb is tested WITHOUT network by pre-seeding localStorage['cuaderno.exdb.v1']. -->
+     exdb is tested WITHOUT network by pre-seeding localStorage['cuaderno.exdb.v3'] (keyed by the catalog's exact db names). -->
 <html>
 <head><meta charset="utf-8"></head>
 <body>
@@ -21,10 +21,9 @@ function state() { return JSON.parse(W().localStorage.getItem('cuaderno.v1')); }
 function aw() { return state().activeWorkout; }
 const GIF = 'data:image/gif;base64,R0lGODlhAQABAIAAAMLCwgAAACH5BAAAAAAALAAAAAABAAEAAAICRAEAOw==';
 function seedExdb() {
-  const names = ['squat', 'bench press', 'deadlift', 'overhead press', 'barbell row', 'pull up'];
   const map = {};
-  for (const n of names) map[n] = { imgs: [GIF, GIF], instructions: ['Step one.', 'Step two.'] };
-  W().localStorage.setItem('cuaderno.exdb.v2', JSON.stringify(map));
+  for (const c of W().eval('CATALOG')) if (c.exdb) map[c.exdb] = { imgs: [GIF, GIF], instructions: ['Step one.', 'Step two.'] };
+  W().localStorage.setItem('cuaderno.exdb.v3', JSON.stringify(map));
 }
 async function loadApp() {
   f.src = 'index.html';
@@ -173,8 +172,8 @@ async function loadApp() {
 
     // ── plan lifecycle through the runner ──
     W().acceptPlan({ type: 'plan', name: 'TEST UL', days: [
-      { name: 'UPPER', exercises: [{ name: 'Bench Press', sets: 2, reps: 5, startWeight: 100, videoQuery: 'bench' }] },
-      { name: 'LOWER', exercises: [{ name: 'Squat', sets: 2, reps: 5, videoQuery: 'squat' }] },
+      { name: 'UPPER', exercises: [{ name: 'Incline DB Press', gear: 'dumbbells', load: 'ext', sets: 2, reps: 5, startWeight: 50, videoQuery: 'incline' }] },
+      { name: 'LOWER', exercises: [{ name: 'Goblet Squat', gear: 'dumbbells', load: 'ext', sets: 2, reps: 5, videoQuery: 'squat' }] },
     ]});
     await sleep(400);
     log('plan accepted: card on home', !!q('.plan-card'));
@@ -183,7 +182,7 @@ async function loadApp() {
     log('plan day: brief shows plan context', aw().mode === 'brief' && /UPPER/.test(q('.brief-sub')?.textContent || ''));
     q('[data-act="lets-go"]').click();
     await sleep(4800); W().wkTick(); await sleep(200);             // 3-2-1-GO (intervals don't fire in headless virtual time — drive the tick)
-    log('plan day: set screen @ target weight', aw().mode === 'set' && q('.set-table input[data-fld="w"]')?.value === '100',
+    log('plan day: set screen @ target weight', aw().mode === 'set' && q('.set-table input[data-fld="w"]')?.value === '50',
         `mode=${aw()?.mode} w=${q('.set-table input[data-fld="w"]')?.value}`);
     q('[data-act="done-set"]').click(); await sleep(300);
     q('[data-act="rest-skip"]')?.click(); await sleep(300);
@@ -244,6 +243,117 @@ async function loadApp() {
     log('exercises screen lists movements (with thumbs)', !!exRow && !!q('img.thumb'));
     exRow.click(); await sleep(400);
     log('exercise detail: records + chart', !!q('.rec-grid') && !!q('#cv-e1rm'));
+
+    // ── the gym: load types, per-gear units, one exercise per catalog entry ──
+    W().acceptPlan({ type: 'plan', name: 'TEST GEAR', days: [{ name: 'MIX', exercises: [
+      { name: 'Push-Up', sets: 1, reps: 10, startWeight: 45 },                                    // bw: a startWeight must be ignored
+      { name: 'DB Row', gear: 'dumbbells', load: 'ext', sets: 1, reps: 10, startWeight: 30 },
+    ]}]});
+    await sleep(300);
+    log('plan: "DB Row" shows as its common name', /Dumbbell Row/.test(q('.plan-card')?.textContent || '') && !/DB Row/.test(q('.plan-card')?.textContent || ''));
+    log('plan: "DB Row" resolved to the ONE catalog exercise (no duplicate)', state().exercises.filter(e => e.cat === 'db-row').length === 1);
+    q('[data-act="start-workout"]').click(); await sleep(400);
+    q('[data-act="lets-go"]').click(); await sleep(4800); W().wkTick(); await sleep(200);
+    log('bw: a push-up has NO weight input', aw().mode === 'set' && !q('.set-table input[data-fld="w"]') && !!q('.set-table .bw-cell'), 'mode=' + aw()?.mode);
+    q('[data-act="done-set"]').click(); await sleep(300);
+    const puId = state().exercises.find(e => e.cat === 'push-up').id;
+    const puSet = state().sessions.flatMap(s => s.entries).find(e => e.exerciseId === puId)?.sets.slice(-1)[0];
+    log('bw: logged push-up carries 0, not 45', puSet?.w === 0 && puSet?.r === 10, JSON.stringify(puSet));
+    q('[data-act="rest-skip"]')?.click(); await sleep(300);
+    log('ext: dumbbell row reads in LB with the plan\'s 30', /LB/.test(q('.set-table .unit-flip')?.textContent || '') && q('.set-table input[data-fld="w"]')?.value === '30',
+        (q('.set-table .unit-flip')?.textContent || '') + ' / ' + q('.set-table input[data-fld="w"]')?.value);
+    W().confirm = () => true;
+    q('.set-table .unit-flip').click(); await sleep(300);
+    log('unit flip: dumbbells now read KG, the pin number stays 30', /KG/.test(q('.set-table .unit-flip')?.textContent || '') && q('.set-table input[data-fld="w"]')?.value === '30',
+        (q('.set-table .unit-flip')?.textContent || '') + ' / ' + q('.set-table input[data-fld="w"]')?.value);
+    q('[data-act="done-set"]').click(); await sleep(500);
+    const rowId = state().exercises.find(e => e.cat === 'db-row').id;
+    const rowSet = state().sessions.flatMap(s => s.entries).find(e => e.exerciseId === rowId)?.sets.slice(-1)[0];
+    log('unit flip: the set is stamped kg and stored as 30 kg in lbs', rowSet?.u === 'kg' && Math.abs(rowSet.w - 30 / 0.45359237) < 0.1, JSON.stringify(rowSet));
+    log('unit flip: history reads it back as 30 kg', W().fmtSet(rowSet, W().eval('exById')(rowId)) === '30×10', W().fmtSet(rowSet, W().eval('exById')(rowId)));
+    W().setGearUnit('dumbbells', 'lb');
+    q('[data-act="goto-home"]')?.click(); await sleep(300);
+
+    // ── gear gate lives in CODE: acceptPlan flags what the gym can't serve ──
+    const warnP = { days: [{ exercises: [{ name: 'Barbell Squat' }, { name: 'Zercher Thing', gear: 'yoke' }, { name: 'Goblet Squat' }] }] };
+    const w1 = W().planWarnings(warnP);
+    log('gear: barbell + unknown gear flagged, dumbbell move not', w1.length === 2 && w1.some(x => /Barbell Squat/.test(x)) && w1.some(x => /yoke/.test(x)), JSON.stringify(w1));
+    W().eval('state').gear.barbell = { have: true };                        // CONTROL: owning a barbell must clear that warning
+    log('gear CONTROL: switching the barbell on clears its warning', W().planWarnings(warnP).length === 1);
+    delete W().eval('state').gear.barbell;
+
+    // ── demos: exact catalog lookup only; a custom exercise never borrows a lookalike picture ──
+    log('demo: catalog exercise resolves its checked entry', !!W().exdbResolve({ cat: 'db-row' }));
+    // an index IS loaded here, holding a lookalike — the old word-overlap matcher would hand the custom move this picture
+    W().eval("EXDB_INDEX = [{ name: 'One-Arm Dumbbell Row', equipment: 'dumbbell', images: ['a/0.jpg', 'a/1.jpg'], instructions: [] }]");
+    log('demo: custom exercise gets NO picture even with a lookalike in the db', W().exdbResolve({ id: 'zz', name: 'Dumbbell Row Variation Thing', load: 'ext' }) === null);
+    W().eval('EXDB_INDEX = null');
+
+    // ── coach reply parsing: Sonnet 5 / Opus 5 think by default, so content[0] is a thinking block ──
+    const thinkingFirst = { stop_reason: 'end_turn', content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: 'Solid session.' }] };
+    log('reply: text found after a thinking block', W().claudeReplyText(thinkingFirst) === 'Solid session.');
+    let threw = null;
+    try { W().claudeReplyText({ stop_reason: 'max_tokens', content: [{ type: 'thinking', thinking: '' }] }); } catch (e) { threw = e.message; }
+    log('reply: no text → throws naming stop_reason (never a success-looking placeholder)', /max_tokens/.test(threw || ''), threw);
+    const oldRead = thinkingFirst.content?.[0]?.text || '(empty response)';   // RED CONTROL: the shipped read, same payload
+    log('reply CONTROL: old content[0] read reproduces "(empty response)"', oldRead === '(empty response)');
+
+    // ── mic: a recognizer failure must SAY so (it used to reset the button and leave the box blank) ──
+    const realSR = W().SpeechRecognition, realWSR = W().webkitSpeechRecognition;
+    const fakeSR = mode => class { start() { setTimeout(() => { if (mode !== 'silent') this.onerror?.({ error: mode }); this.onend?.(); }, 10); } stop() { this.onend?.(); } };
+    try {
+      W().SpeechRecognition = fakeSR('not-allowed');
+      W().openCheckin(); await sleep(100);
+      D().getElementById('db-mic').click(); await sleep(200);
+      const st = D().getElementById('db-mic-status');
+      log('mic: blocked permission is reported, not swallowed', !st.hidden && /blocked/.test(st.textContent), st.textContent);
+      log('mic: button resets after the failure', D().getElementById('db-mic').textContent.includes('record'));
+      W().SpeechRecognition = fakeSR('silent');
+      W().openCheckin(); await sleep(100);                       // the modal binds the recognizer class when it opens
+      D().getElementById('db-mic').click(); await sleep(200);
+      log('mic: a session that hears nothing says so', !st.hidden && /isn't hearing/.test(st.textContent), st.textContent);
+    } finally {
+      W().SpeechRecognition = realSR; W().webkitSpeechRecognition = realWSR;
+      D().getElementById('debrief-modal').close();
+    }
+
+    // ── schema 2 migration on a LEGACY state: merge dupes, zero the fake 45s, keep real loads ──
+    const legacy = {
+      settings: { units: 'lbs', claude: { equipment: 'Dumbbells, pulley machine; no barbell' } },
+      exercises: [{ id: 'a', name: 'Push-Up' }, { id: 'b', name: 'DB Row' }, { id: 'c', name: 'Dumbbell Row' },
+                  { id: 'd', name: 'Weird Custom' }, { id: 'e', name: 'Weighted Pull-Up' }],
+      sessions: [{ id: 's1', date: '2026-09-10', endedAt: 9, entries: [
+        { exerciseId: 'a', sets: [{ w: 45, r: 10, ts: 1 }, { w: 45, r: 12, ts: 2 }] },
+        { exerciseId: 'b', sets: [{ w: 15, r: 10, ts: 3 }] },
+        { exerciseId: 'c', sets: [{ w: 20, r: 10, ts: 4 }] },
+        { exerciseId: 'd', sets: [{ w: 45, r: 5, ts: 5 }] },
+        { exerciseId: 'e', sets: [{ w: 45, r: 5, ts: 6 }, { w: 25, r: 6, ts: 7 }] },
+      ], debrief: { text: 'ok', reply: '(empty response)' } }],
+      bodyweight: [], cardio: [], activeWorkout: null, lastModified: 1,
+      plan: { name: 'P', cursor: 0, days: [{ id: 'd1', name: 'D', exercises: [
+        { exerciseId: 'b', name: 'DB Row', sets: 3, reps: 10, w: 15 }, { exerciseId: 'a', name: 'Push-Up', sets: 3, reps: 10, w: 45 }] }] },
+    };
+    W().localStorage.setItem('cuaderno.v1', JSON.stringify(legacy));
+    await loadApp();
+    const m = state(), ents = m.sessions[0].entries, eid = n => m.exercises.find(x => x.name === n)?.id;
+    log('migrate: "DB Row" + "Dumbbell Row" → one exercise', m.exercises.filter(x => x.cat === 'db-row').length === 1 && !m.exercises.some(x => x.name === 'DB Row'));
+    log('migrate: their sets merged into one entry, none lost', ents.find(x => x.exerciseId === eid('Dumbbell Row'))?.sets.length === 2 && ents.reduce((n, x) => n + x.sets.length, 0) === 7);
+    log('migrate: the fake 45 on push-ups → 0', ents.find(x => x.exerciseId === eid('Push-Up')).sets.every(s => s.w === 0));
+    log('migrate CONTROL: a bw+ 45 (pull-up) and a custom 45 are REAL and kept',
+        ents.find(x => x.exerciseId === eid('Pull-Up'))?.sets.map(s => s.w).join() === '45,25' && ents.find(x => x.exerciseId === eid('Weird Custom'))?.sets[0].w === 45);
+    log('migrate: every set stamped u', ents.every(x => x.sets.every(s => s.u === 'lb')));
+    log('migrate: plan points at the survivor, bw target has no weight', m.plan.days[0].exercises[0].exerciseId === eid('Dumbbell Row') && m.plan.days[0].exercises[1].w === null);
+    log('migrate: "(empty response)" is not kept as a reply', m.sessions[0].debrief.reply === null);
+    log('migrate: old-gym equipment text is parked, not fed to Coach', m.settings.claude.equipment === '' && /pulley/.test(m.settings.claude.equipmentOld));
+    log('migrate: pre-migration snapshot kept on the device', !!W().localStorage.getItem('cuaderno.v1.pre-schema2'));
+    const again = W().schemaMigrate(JSON.parse(JSON.stringify(m)));
+    log('migrate: idempotent (a second run changes nothing)', JSON.stringify(again) === JSON.stringify(m));
+    // an OLD build still on another device pushes a u-less 45-lb push-up: the next load must clean it
+    const pushedByOld = JSON.parse(JSON.stringify(m));
+    pushedByOld.sessions[0].entries.find(x => x.exerciseId === eid('Push-Up')).sets.push({ w: 45, r: 8, ts: 99 });
+    const cleaned = W().schemaMigrate(pushedByOld);
+    const lastPu = cleaned.sessions[0].entries.find(x => x.exerciseId === eid('Push-Up')).sets.slice(-1)[0];
+    log('migrate: an old build\'s u-less 45 push-up is cleaned on the next pull', lastPu.w === 0 && lastPu.u === 'lb', JSON.stringify(lastPu));
 
     log('ALL DONE', true);
   } catch (e) {

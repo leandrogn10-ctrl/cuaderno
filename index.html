@@ -454,6 +454,20 @@ dialog::backdrop { background: rgba(4, 6, 3, 0.82); backdrop-filter: blur(4px); 
 .plan-accept { border: 1px solid var(--c-sage-bd); background: color-mix(in srgb, var(--accent) 6%, var(--paper)); padding: 12px 14px; }
 .plan-accept h4 { font-family: 'Big Shoulders Display', sans-serif; font-weight: 900; text-transform: uppercase; font-size: 20px; margin-bottom: 6px; }
 .plan-accept .pa-day { font-size: 11px; color: var(--ink-dim); padding: 3px 0; border-top: 1px solid var(--line-soft); }
+.plan-accept .pa-warn { font-size: 11px; color: var(--hot); padding: 6px 0 0; border-top: 1px solid var(--line-soft); line-height: 1.5; }
+.set-table .st-off { visibility: hidden; }
+.set-table .bw-cell { height: 52px; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--line); color: var(--ink-faint); font-size: 13px; letter-spacing: 0.12em; }
+.set-table .unit-flip { font-size: 11px; font-weight: 600; padding: 2px 0 4px; color: var(--cool); text-decoration: underline dotted; text-underline-offset: 3px; }
+.gear-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.gear-row input[type=checkbox] { accent-color: var(--accent); width: 18px; height: 18px; flex-shrink: 0; }
+.gear-row .gn { flex: 1 1 150px; min-width: 0; }
+.gear-row .gc { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.gear-row .gn small { display: block; color: var(--ink-faint); font-size: 10px; }
+.gear-row.off .gn { color: var(--ink-faint); text-decoration: line-through; }
+.gear-row input[type=number] { width: 52px; background: var(--bg); border: 1px solid var(--line); padding: 5px; text-align: center; color: var(--ink); }
+.gear-row .seg button { padding: 5px 9px; }
+.pick-row.off { opacity: 0.45; }
+#exm-load button { padding: 8px 12px; }
 .coach-input { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
 .coach-input textarea { flex: 1; background: var(--paper); border: 1px solid var(--line); padding: 10px 12px; font-size: 13px; resize: none; height: 44px; }
 .coach-input textarea:focus { border-color: var(--accent); }
@@ -615,6 +629,7 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
         <button class="btn-secondary" id="db-tidy" hidden>✨ tidy</button>
         <span style="font-size:10px;color:var(--ink-faint);letter-spacing:0.06em">tip: the 🎙 on your keyboard dictates straight into the box</span>
       </div>
+      <div id="db-mic-status" role="status" hidden style="margin-top:8px;font-size:12px;line-height:1.4"></div>
       <div id="db-reply" style="margin-top:12px;display:flex;flex-direction:column;gap:10px"></div>
     </div>
     <footer><span id="db-foot" style="font-size:10px;color:var(--ink-faint)">saved to this session — coach reads these</span><button class="btn-primary chamfer" id="db-send">SEND</button></footer>
@@ -672,9 +687,10 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
         </div>
       </div>
       <div class="settings-section">
-        <h3>My equipment</h3>
-        <div class="desc">Everything you actually have. Coach treats this as a HARD limit — it will never program gear that isn't listed here.</div>
-        <textarea id="equipment" placeholder="e.g. adjustable dumbbells to 50 lb, pull-up bar, resistance bands, flat bench…"></textarea>
+        <h3>The gym</h3>
+        <div class="desc">Your building's gym, read from your photos. Coach only programs what's switched on here — a hard limit, checked in code. The unit is what the numbers <em>on that equipment</em> say: if a machine turns out to be kg, flip it here (or tap the unit on the set screen).</div>
+        <div id="gear-list"></div>
+        <textarea id="equipment" style="margin-top:10px" placeholder="anything else Coach should know about the gym…"></textarea>
       </div>
       <div class="settings-section">
         <h3>Program note for Coach</h3>
@@ -730,6 +746,24 @@ body[data-view="workout"] .rest-pill { bottom: calc(126px + env(safe-area-inset-
       </div>
     </div>
     <footer><span style="color:var(--ink-faint);font-size:11px">changes save automatically</span><button class="btn-primary chamfer" data-close="settings">DONE</button></footer>
+  </div>
+</dialog>
+
+<!-- ── exercise sheet: load type, gear, demo video ── -->
+<dialog id="ex-modal">
+  <div class="modal">
+    <header><div><h2>Exercise</h2><p id="exm-cat"></p></div><button type="button" class="close" data-close="ex">×</button></header>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label class="span-2">Name<input type="text" id="exm-name" autocomplete="off"></label>
+        <label class="span-2">Loaded with
+          <span class="seg" id="exm-load"><button type="button" data-load="bw">bodyweight</button><button type="button" data-load="bw+">bw + added</button><button type="button" data-load="ext">weight</button></span>
+        </label>
+        <label class="span-2">Done on<select id="exm-gear"></select></label>
+        <label class="span-2">Demo video (YouTube URL, optional)<input type="text" id="exm-video" autocomplete="off" placeholder="https://youtu.be/…"></label>
+      </div>
+    </div>
+    <footer><button class="btn-danger" id="exm-archive" type="button">archive</button><button class="btn-primary chamfer" id="exm-save" type="button">SAVE</button></footer>
   </div>
 </dialog>
 
@@ -798,18 +832,161 @@ const GIST_FILENAME = APP.GIST_FILENAME;
 const DEFAULT_CLAUDE_RULES = `You are Coach inside La Forja, Leandro's training log. Be direct, technical, motivating without cheerleading. Short answers. Push progressive overload but respect recovery and the program note. Never invent training history — use only the context given.`;
 const LB = 0.45359237;
 
+/* ═══ THE GYM — the building gym, read from Leandro's photos (2026-09-25). Declared ABOVE `let state =
+   load()`: migrate() reads these on the first line that runs, and a const below it is in its TDZ.
+   `unit` is what the numbers ON that equipment read. The stacks are Atlantis, whose US spec sheets
+   print lb; the dumbbell labels were unreadable in the photos, lb is the US default. Neither is
+   certain — which is why every unit is one tap to correct (settings, or the unit on the set screen).
+   `have:false` = not in this gym. Coach may only program gear with have:true, and acceptPlan checks
+   that in code: a rule that lives only in the prompt dies the day the model ignores it. ═══ */
+const GEAR_DEFAULTS = {
+  dumbbells:   { name: 'Dumbbells', unit: 'lb', step: 5, have: true },
+  bench:       { name: 'Adjustable bench', have: true },
+  cable:       { name: 'Functional trainer (dual cable)', unit: 'lb', step: 5, have: true, note: 'the pin number is the stack, not the pull at the handle' },
+  pullupbar:   { name: 'Pull-up bar', have: true },
+  dipstation:  { name: "Captain's chair / dip station", have: true },
+  latpull:     { name: 'Lat pulldown / low row', unit: 'lb', step: 5, have: true },
+  legpress:    { name: 'Seated leg press', unit: 'lb', step: 5, have: true },
+  legextcurl:  { name: 'Leg extension / leg curl', unit: 'lb', step: 5, have: true },
+  pecfly:      { name: 'Pec fly / rear delt', unit: 'lb', step: 5, have: true },
+  inclinerow:  { name: 'Chest-supported row machine', unit: 'lb', step: 5, have: true },
+  armcurl:     { name: 'Preacher curl machine', unit: 'lb', step: 5, have: true },
+  abcrunch:    { name: 'Ab crunch machine', unit: 'lb', step: 5, have: true },
+  medball:     { name: 'Medicine balls', unit: 'lb', step: 2, have: true },
+  band:        { name: 'Resistance band', have: true },
+  bosu:        { name: 'BOSU ball', have: true },
+  chestpress:  { name: 'Chest press machine', unit: 'lb', step: 5, have: false },
+  shoulderpress: { name: 'Shoulder press machine', unit: 'lb', step: 5, have: false },
+  backext:     { name: 'Back extension bench', have: false },
+  barbell:     { name: 'Barbell + rack', unit: 'lb', step: 5, have: false },
+};
+/* The exercise catalog: the MOST COMMON name, how it's loaded, what it needs, and the exact
+   free-exercise-db entry whose two frames were checked BY EYE against the name (2026-09-25 contact
+   sheet, 86/86). load: 'bw' = bodyweight, no weight column · 'bw+' = bodyweight plus optional added
+   weight · 'ext' = the number on the dumbbell/pin. exdb:null = no trustworthy demo exists — the app
+   shows a video search instead of the nearest-looking wrong picture. Row: [key, name, load, gear, exdb, aliases] */
+const CATALOG = [
+  ['push-up', 'Push-Up', 'bw', '', 'Pushups', ['pushup', 'push ups', 'pushups']],
+  ['incline-push-up', 'Incline Push-Up', 'bw', 'bench', 'Incline Push-Up', []],
+  ['decline-push-up', 'Decline Push-Up', 'bw', 'bench', 'Push-Ups With Feet Elevated', ['feet elevated push up']],
+  ['diamond-push-up', 'Diamond Push-Up', 'bw', '', 'Push-Ups - Close Triceps Position', ['close grip push up']],
+  ['db-bench', 'Dumbbell Bench Press', 'ext', 'dumbbells', 'Dumbbell Bench Press', ['db bench press', 'db bench']],
+  ['db-incline', 'Incline Dumbbell Press', 'ext', 'dumbbells', 'Incline Dumbbell Press', ['dumbbell incline press', 'db incline press', 'incline db press']],
+  ['db-fly', 'Dumbbell Fly', 'ext', 'dumbbells', 'Dumbbell Flyes', ['dumbbell flyes', 'db fly']],
+  ['cable-crossover', 'Cable Crossover', 'ext', 'cable', 'Cable Crossover', ['cable fly', 'cable chest fly']],
+  ['pec-deck', 'Pec Deck', 'ext', 'pecfly', 'Butterfly', ['machine fly', 'pec fly', 'chest fly machine']],
+  ['machine-chest-press', 'Machine Chest Press', 'ext', 'chestpress', 'Leverage Chest Press', ['chest press', 'seated chest press']],
+  ['chest-dip', 'Chest Dip', 'bw+', 'dipstation', 'Dips - Chest Version', ['dips', 'dip']],
+  ['pull-up', 'Pull-Up', 'bw+', 'pullupbar', 'Pullups', ['pullup', 'pull ups', 'weighted pull up', 'weighted pullup']],
+  ['chin-up', 'Chin-Up', 'bw+', 'pullupbar', 'Chin-Up', ['chinup', 'chin ups']],
+  ['lat-pulldown', 'Lat Pulldown', 'ext', 'latpull', 'Wide-Grip Lat Pulldown', ['wide grip lat pulldown', 'pulldown']],
+  ['close-grip-pulldown', 'Close-Grip Lat Pulldown', 'ext', 'latpull', 'Close-Grip Front Lat Pulldown', ['v bar pulldown']],
+  ['seated-cable-row', 'Seated Cable Row', 'ext', 'latpull', 'Seated Cable Rows', ['cable row', 'low row', 'seated row']],
+  ['machine-row', 'Chest-Supported Machine Row', 'ext', 'inclinerow', 'Lying T-Bar Row', ['incline lever row', 'chest supported machine row', 't bar row']],
+  ['db-row', 'Dumbbell Row', 'ext', 'dumbbells', 'One-Arm Dumbbell Row', ['db row', 'one arm dumbbell row', 'single arm dumbbell row']],
+  ['db-bent-row', 'Bent-Over Dumbbell Row', 'ext', 'dumbbells', 'Bent Over Two-Dumbbell Row', ['two dumbbell row']],
+  ['chest-supported-row', 'Chest-Supported Dumbbell Row', 'ext', 'dumbbells', 'Dumbbell Incline Row', ['dumbbell chest supported row', 'db chest supported row', 'incline dumbbell row']],
+  ['face-pull', 'Face Pull', 'ext', 'cable', 'Face Pull', []],
+  ['straight-arm-pulldown', 'Straight-Arm Pulldown', 'ext', 'cable', 'Straight-Arm Pulldown', ['straight arm lat pulldown']],
+  ['inverted-row', 'Inverted Row', 'bw', 'barbell', null, []],
+  ['superman', 'Superman', 'bw', '', 'Superman', []],
+  ['back-extension', 'Back Extension', 'bw+', 'backext', 'Hyperextensions (Back Extensions)', ['hyperextension']],
+  ['db-shoulder-press', 'Dumbbell Shoulder Press', 'ext', 'dumbbells', 'Dumbbell Shoulder Press', ['dumbbell overhead press', 'db overhead press', 'db shoulder press', 'seated dumbbell press']],
+  ['arnold-press', 'Arnold Press', 'ext', 'dumbbells', 'Arnold Dumbbell Press', []],
+  ['lateral-raise', 'Lateral Raise', 'ext', 'dumbbells', 'Side Lateral Raise', ['dumbbell lateral raise', 'db lateral raise', 'side lateral raise']],
+  ['front-raise', 'Front Raise', 'ext', 'dumbbells', 'Front Dumbbell Raise', ['dumbbell front raise']],
+  ['rear-delt-fly', 'Rear Delt Fly', 'ext', 'dumbbells', 'Seated Bent-Over Rear Delt Raise', ['reverse fly', 'dumbbell rear delt fly']],
+  ['cable-lateral-raise', 'Cable Lateral Raise', 'ext', 'cable', 'Standing Low-Pulley Deltoid Raise', []],
+  ['reverse-pec-deck', 'Reverse Pec Deck', 'ext', 'pecfly', 'Reverse Machine Flyes', ['reverse machine fly', 'rear delt machine']],
+  ['machine-shoulder-press', 'Machine Shoulder Press', 'ext', 'shoulderpress', 'Machine Shoulder (Military) Press', []],
+  ['pike-push-up', 'Pike Push-Up', 'bw', '', null, []],
+  ['db-shrug', 'Dumbbell Shrug', 'ext', 'dumbbells', 'Dumbbell Shrug', ['shrug']],
+  ['db-upright-row', 'Dumbbell Upright Row', 'ext', 'dumbbells', 'Standing Dumbbell Upright Row', []],
+  ['db-curl', 'Dumbbell Curl', 'ext', 'dumbbells', 'Dumbbell Bicep Curl', ['db curl', 'bicep curl', 'biceps curl']],
+  ['hammer-curl', 'Hammer Curl', 'ext', 'dumbbells', 'Hammer Curls', ['dumbbell hammer curl', 'db hammer curl']],
+  ['incline-curl', 'Incline Dumbbell Curl', 'ext', 'dumbbells', 'Incline Dumbbell Curl', []],
+  ['concentration-curl', 'Concentration Curl', 'ext', 'dumbbells', 'Concentration Curls', []],
+  ['zottman-curl', 'Zottman Curl', 'ext', 'dumbbells', 'Zottman Curl', []],
+  ['cable-curl', 'Cable Curl', 'ext', 'cable', 'Standing Biceps Cable Curl', []],
+  ['rope-hammer-curl', 'Rope Hammer Curl', 'ext', 'cable', 'Cable Hammer Curls - Rope Attachment', ['cable hammer curl']],
+  ['machine-curl', 'Machine Preacher Curl', 'ext', 'armcurl', 'Machine Preacher Curls', ['preacher curl machine', 'preacher curl']],
+  ['rope-pushdown', 'Triceps Rope Pushdown', 'ext', 'cable', 'Triceps Pushdown - Rope Attachment', ['rope pushdown', 'tricep rope pushdown']],
+  ['pushdown', 'Triceps Pushdown', 'ext', 'cable', 'Triceps Pushdown', ['tricep pushdown', 'cable pushdown']],
+  ['cable-overhead-ext', 'Overhead Cable Triceps Extension', 'ext', 'cable', 'Triceps Overhead Extension with Rope', []],
+  ['db-overhead-ext', 'Overhead Dumbbell Triceps Extension', 'ext', 'dumbbells', 'Standing Dumbbell Triceps Extension', ['dumbbell tricep overhead extension', 'db tricep overhead extension', 'overhead tricep extension']],
+  ['skull-crusher', 'Dumbbell Skull Crusher', 'ext', 'dumbbells', 'Lying Dumbbell Tricep Extension', ['skull crusher']],
+  ['kickback', 'Triceps Kickback', 'ext', 'dumbbells', 'Tricep Dumbbell Kickback', ['dumbbell kickback']],
+  ['bench-dip', 'Bench Dip', 'bw', 'bench', 'Bench Dips', ['tricep dips', 'triceps dips']],
+  ['tricep-dip', 'Triceps Dip', 'bw+', 'dipstation', 'Dips - Triceps Version', []],
+  ['goblet-squat', 'Goblet Squat', 'ext', 'dumbbells', 'Goblet Squat', ['dumbbell goblet squat', 'db goblet squat']],
+  ['db-squat', 'Dumbbell Squat', 'ext', 'dumbbells', 'Dumbbell Squat', []],
+  ['bw-squat', 'Bodyweight Squat', 'bw', '', 'Bodyweight Squat', ['air squat']],
+  ['bulgarian', 'Bulgarian Split Squat', 'ext', 'dumbbells', null, ['dumbbell bulgarian split squat', 'db bulgarian split squat', 'rear foot elevated split squat']],
+  ['split-squat', 'Dumbbell Split Squat', 'ext', 'dumbbells', 'Split Squat with Dumbbells', []],
+  ['db-lunge', 'Dumbbell Lunge', 'ext', 'dumbbells', 'Dumbbell Lunges', ['lunge', 'walking lunge']],
+  ['reverse-lunge', 'Reverse Lunge', 'ext', 'dumbbells', 'Dumbbell Rear Lunge', ['db reverse lunge', 'dumbbell reverse lunge']],
+  ['step-up', 'Dumbbell Step-Up', 'ext', 'dumbbells', 'Dumbbell Step Ups', ['step up', 'dumbbell step up']],
+  ['db-deadlift', 'Dumbbell Deadlift', 'ext', 'dumbbells', null, []],
+  ['db-rdl', 'Dumbbell Romanian Deadlift', 'ext', 'dumbbells', 'Stiff-Legged Dumbbell Deadlift', ['db romanian deadlift', 'dumbbell rdl', 'rdl', 'romanian deadlift']],
+  ['sl-rdl', 'Single-Leg Romanian Deadlift', 'ext', 'dumbbells', null, ['db single leg romanian deadlift', 'dumbbell single leg romanian deadlift', 'single leg rdl']],
+  ['sumo-squat', 'Dumbbell Sumo Squat', 'ext', 'dumbbells', 'Plie Dumbbell Squat', ['db sumo squat', 'plie squat']],
+  ['leg-press', 'Leg Press', 'ext', 'legpress', 'Leg Press', []],
+  ['leg-extension', 'Leg Extension', 'ext', 'legextcurl', 'Leg Extensions', []],
+  ['leg-curl', 'Seated Leg Curl', 'ext', 'legextcurl', 'Seated Leg Curl', ['leg curl', 'hamstring curl']],
+  ['calf-raise', 'Dumbbell Calf Raise', 'ext', 'dumbbells', 'Standing Dumbbell Calf Raise', ['db calf raise', 'calf raise']],
+  ['leg-press-calf', 'Leg Press Calf Raise', 'ext', 'legpress', 'Calf Press On The Leg Press Machine', ['calf press']],
+  ['glute-bridge', 'Glute Bridge', 'bw+', '', 'Butt Lift (Bridge)', ['dumbbell glute bridge', 'bridge', 'hip bridge']],
+  ['pull-through', 'Cable Pull-Through', 'ext', 'cable', 'Pull Through', []],
+  ['cable-kickback', 'Cable Glute Kickback', 'ext', 'cable', 'One-Legged Cable Kickback', ['glute kickback']],
+  ['plank', 'Plank', 'bw', '', 'Plank', []],
+  ['side-plank', 'Side Plank', 'bw', '', 'Side Bridge', []],
+  ['crunch', 'Crunch', 'bw', '', 'Crunches', ['crunches']],
+  ['bicycle-crunch', 'Bicycle Crunch', 'bw', '', 'Air Bike', []],
+  ['reverse-crunch', 'Reverse Crunch', 'bw', '', 'Reverse Crunch', []],
+  ['leg-raise', 'Lying Leg Raise', 'bw', '', 'Flat Bench Lying Leg Raise', ['leg raise', 'leg raises']],
+  ['hanging-leg-raise', 'Hanging Leg Raise', 'bw', 'pullupbar', 'Hanging Leg Raise', []],
+  ['captains-chair', "Captain's Chair Knee Raise", 'bw', 'dipstation', 'Knee/Hip Raise On Parallel Bars', ['knee raise', 'vertical knee raise', 'captains chair']],
+  ['cable-crunch', 'Cable Crunch', 'ext', 'cable', 'Cable Crunch', ['kneeling cable crunch']],
+  ['machine-crunch', 'Ab Crunch Machine', 'ext', 'abcrunch', 'Ab Crunch Machine', ['machine crunch']],
+  ['russian-twist', 'Russian Twist', 'bw+', '', 'Russian Twist', []],
+  ['mountain-climber', 'Mountain Climber', 'bw', '', 'Mountain Climbers', ['mountain climbers']],
+  ['dead-bug', 'Dead Bug', 'bw', '', 'Dead Bug', []],
+  ['pallof-press', 'Pallof Press', 'ext', 'cable', 'Pallof Press', []],
+  ['woodchop', 'Cable Woodchop', 'ext', 'cable', 'Standing Cable Wood Chop', ['wood chop']],
+  ['flutter-kick', 'Flutter Kicks', 'bw', '', 'Flutter Kicks', []],
+  ['sit-up', 'Sit-Up', 'bw', '', 'Sit-Up', []],
+  ['med-ball-slam', 'Medicine Ball Slam', 'ext', 'medball', 'Overhead Slam', ['ball slam', 'slam']],
+  ['farmers-walk', "Farmer's Walk", 'ext', 'dumbbells', "Farmer's Walk", ['farmer carry', 'farmers carry']],
+  // barbell lifts: kept so old history resolves and a future gym can switch the barbell on
+  ['bb-squat', 'Barbell Squat', 'ext', 'barbell', 'Barbell Squat', ['squat', 'back squat']],
+  ['bb-bench', 'Barbell Bench Press', 'ext', 'barbell', 'Barbell Bench Press - Medium Grip', ['bench press']],
+  ['bb-deadlift', 'Barbell Deadlift', 'ext', 'barbell', 'Barbell Deadlift', ['deadlift']],
+  ['bb-ohp', 'Overhead Press', 'ext', 'barbell', 'Standing Military Press', ['ohp', 'military press', 'barbell overhead press']],
+  ['bb-row', 'Barbell Row', 'ext', 'barbell', 'Bent Over Barbell Row', ['bent over barbell row']],
+].map(([key, name, load, gear, exdb, aliases]) => ({ key, name, load, gear, exdb, aliases }));
+const CAT = Object.fromEntries(CATALOG.map(c => [c.key, c]));
+const catNorm = s => String(s || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const CAT_BY_NAME = (() => {   // normalized name/alias → key; a duplicate is a catalog bug, so it throws at load in the harness
+  const m = {};
+  for (const c of CATALOG) for (const n of [c.name, ...c.aliases]) {
+    const k = catNorm(n);
+    if (m[k] && m[k] !== c.key) throw new Error('catalog alias collision: ' + n);
+    m[k] = c.key;
+  }
+  return m;
+})();
+function catFor(name) { return CAT[CAT_BY_NAME[catNorm(name)]] || null; }
+/* the gear a session happened on can't be read off an old set; anything logged since the move to
+   the new building is assumed to be this gym — used only to scope a unit relabel. */
+const GYM_SINCE = Date.parse('2026-08-15T00:00:00');
+const SCHEMA = 2;   // 2 = exercises carry cat/load/gear; sets carry u (the unit the number was read in)
+
 /* ── app hooks ── */
 function appDefaultState() {
+  const seed = ['db-bench', 'db-row', 'goblet-squat', 'db-shoulder-press', 'lat-pulldown', 'pull-up'];
   return {
-    exercises: [
-      { id: 'sq', name: 'Squat', step: 5, videoQuery: 'how to barbell squat proper form', createdAt: Date.now() },
-      { id: 'bp', name: 'Bench Press', step: 5, videoQuery: 'bench press form guide', createdAt: Date.now() },
-      { id: 'dl', name: 'Deadlift', step: 5, videoQuery: 'how to deadlift proper form', createdAt: Date.now() },
-      { id: 'op', name: 'Overhead Press', step: 2.5, videoQuery: 'overhead press form', createdAt: Date.now() },
-      { id: 'rw', name: 'Barbell Row', step: 5, videoQuery: 'barbell row form', createdAt: Date.now() },
-      { id: 'pu', name: 'Pull-up', step: 2.5, videoQuery: 'pull up form', createdAt: Date.now() },
-    ],
-    sessions: [], bodyweight: [], cardio: [], plan: null, activeWorkout: null,
+    exercises: seed.map(k => ({ id: k, name: CAT[k].name, cat: k, createdAt: Date.now() })),
+    sessions: [], bodyweight: [], cardio: [], plan: null, activeWorkout: null, gear: {}, schema: SCHEMA,
   };
 }
 function appMigrate(s) {
@@ -831,7 +1008,93 @@ function appMigrate(s) {
   s.settings.claude.programNote = s.settings.claude.programNote ?? '';
   s.settings.claude.equipment = s.settings.claude.equipment ?? '';
   s.settings.micLang = s.settings.micLang || 'en-US';   // speech recognition ≠ phone language (his phone is es, debriefs are en)
+  s.gear = s.gear || {};
+  for (const [id, g] of Object.entries(s.gear)) if (!GEAR_DEFAULTS[id] || typeof g !== 'object') delete s.gear[id];
+  s.exMerged = s.exMerged || {};
+  return schemaMigrate(s);
+}
+/* Schema 2. Runs on EVERY load and every gist pull, so each step is idempotent: a phone still on
+   the old build can push u-less sets and 45-lb push-ups back up, and this must clean them again
+   without touching anything it already fixed. The `u` stamp is the per-set "already migrated" mark. */
+function schemaMigrate(s) {
+  const first = (s.schema || 1) < 2;
+  if (first) {
+    try { localStorage.setItem('cuaderno.v1.pre-schema2', JSON.stringify(s)); localStorage.removeItem('cuaderno.exdb.v2'); } catch (e) {}   // one-time escape hatch; the fuzzy demo cache dies here
+    // the old free-text equipment described the OLD gym — as a "HARD CONSTRAINT" it would now lie to Coach
+    if (s.settings.claude.equipment) { s.settings.claude.equipmentOld = s.settings.claude.equipment; s.settings.claude.equipment = ''; }
+    schemaMigrate.upgraded = true;   // a property, not a `let`: this runs inside `let state = load()`, above any later declaration
+  }
+  // 1) every exercise resolves to a catalog entry by its name or an alias; duplicates collapse onto one
+  const byCat = {};
+  for (const ex of s.exercises) {
+    if (!ex.cat && !ex.load) { const c = catFor(ex.name); if (c) ex.cat = c.key; }
+    if (ex.cat && CAT[ex.cat]) ex.name = CAT[ex.cat].name;   // the most common name, always
+    if (ex.cat) (byCat[ex.cat] = byCat[ex.cat] || []).push(ex);
+  }
+  const setCount = id => s.sessions.reduce((n, x) => n + x.entries.filter(e => e.exerciseId === id).reduce((m, e) => m + e.sets.length, 0), 0);
+  for (const group of Object.values(byCat)) {
+    if (group.length < 2) continue;
+    const keep = [...group].sort((a, b) => setCount(b.id) - setCount(a.id) || (a.createdAt || 0) - (b.createdAt || 0))[0];
+    for (const ex of group) if (ex !== keep) { s.exMerged[ex.id] = keep.id; if (ex.videoUrl && !keep.videoUrl) keep.videoUrl = ex.videoUrl; }
+  }
+  if (Object.keys(s.exMerged).length) {
+    const to = id => { let n = 0; while (s.exMerged[id] && n++ < 10) id = s.exMerged[id]; return id; };
+    s.exercises = s.exercises.filter(ex => !s.exMerged[ex.id]);
+    for (const x of s.sessions) {
+      const merged = [];
+      for (const en of x.entries) {
+        en.exerciseId = to(en.exerciseId);
+        const same = merged.find(m => m.exerciseId === en.exerciseId);
+        if (same) same.sets = [...same.sets, ...en.sets].sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        else merged.push(en);
+      }
+      x.entries = merged;
+    }
+    for (const d of s.plan?.days || []) for (const t of d.exercises) t.exerciseId = to(t.exerciseId);
+    for (const wx of s.activeWorkout?.exercises || []) wx.exerciseId = to(wx.exerciseId);
+  }
+  // 2) the 45 that buildRows used to prefill (an empty barbell) is not a weight on a push-up
+  const loadOf = id => { const ex = s.exercises.find(e => e.id === id); return ex?.load || CAT[ex?.cat]?.load || 'ext'; };
+  for (const x of s.sessions) for (const en of x.entries) {
+    const bw = loadOf(en.exerciseId) === 'bw';
+    for (const st of en.sets) {
+      if (st.u) continue;
+      if (bw && st.w === 45) st.w = 0;
+      st.u = 'lb';   // every pre-schema-2 weight was canonical lbs
+    }
+  }
+  for (const wx of s.activeWorkout?.exercises || []) if (loadOf(wx.exerciseId) === 'bw') for (const r of wx.rows) if (!r.done && r.w === 45) r.w = 0;
+  for (const d of s.plan?.days || []) for (const t of d.exercises) {
+    const ex = s.exercises.find(e => e.id === t.exerciseId);
+    if (ex) t.name = ex.name;
+    if (loadOf(t.exerciseId) === 'bw') t.w = null;
+  }
+  // 3) PR flags are derived — recompute after merges/zeroing so no phantom PR survives
+  recomputePRs(s);
+  // 4) a reply that was never a reply
+  for (const x of s.sessions) if (x.debrief?.reply === '(empty response)') x.debrief.reply = null;
+  for (const c of s.checkins) if (c.reply === '(empty response)') c.reply = null;
+  // 5) once: the never-logged seeds this gym can't serve (the barbell lifts) leave the lists; anything with history stays
+  if (first) for (const ex of s.exercises) {
+    const g = ex.gear ?? CAT[ex.cat]?.gear;
+    const have = !g || ({ ...GEAR_DEFAULTS[g], ...(s.gear[g] || {}) }).have;
+    if (!have && !setCount(ex.id)) ex.archived = true;
+  }
+  s.schema = SCHEMA;
   return s;
+}
+function recomputePRs(s) {
+  const all = [];
+  for (const x of s.sessions) for (const en of x.entries) for (const st of en.sets) all.push({ id: en.exerciseId, st });
+  all.sort((a, b) => (a.st.ts || 0) - (b.st.ts || 0));
+  const best = {};
+  for (const { id, st } of all) {
+    delete st.pr;
+    if (!st.r || !(st.w > 0)) continue;   // PRs are e1RM-based: rep sets carrying a load
+    const e = st.w * (1 + st.r / 30);
+    if (best[id] > 0 && e > best[id]) st.pr = true;
+    best[id] = Math.max(best[id] || 0, e);
+  }
 }
 function looksLikeMyState(s) {
   return !!(s && typeof s === 'object' && s.settings && Array.isArray(s.exercises) && Array.isArray(s.sessions));
@@ -936,20 +1199,37 @@ document.getElementById('prompt-ok').addEventListener('click', () => {
   promptModal.close();
 });
 
-/* ── units: lbs canonical, convert at the edge ── */
+/* ── units: every weight is STORED in canonical lbs. A number on a machine is read in THAT
+   machine's unit (its gear), so the set screen converts at the edge per exercise; each logged set
+   also carries `u`, the unit it was read in. Totals (volume, tonnage, bodyweight) use the summary
+   unit in settings. ── */
 const isKg = () => state.settings.units === 'kg';
 const dispW = w => isKg() ? Math.round(w * LB * 10) / 10 : Math.round(w * 10) / 10;
 const canonW = w => isKg() ? w / LB : w;
 const unitLbl = () => isKg() ? 'kg' : 'lbs';
-const stepFor = ex => isKg() ? ((ex?.step ?? 5) <= 2.5 ? 1.25 : 2.5) : (ex?.step ?? 5);   // stepper increment in DISPLAY units
+const toU = (w, u) => u === 'kg' ? Math.round(w * LB * 10) / 10 : Math.round(w * 10) / 10;   // canonical lb → u
+const fromU = (v, u) => u === 'kg' ? v / LB : v;
+function gearOf(id) { return id && GEAR_DEFAULTS[id] ? { id, ...GEAR_DEFAULTS[id], ...(state.gear?.[id] || {}) } : null; }
+function gearList() { return Object.keys(GEAR_DEFAULTS).map(gearOf); }
+function exLoad(ex) { return ex?.load || CAT[ex?.cat]?.load || 'ext'; }
+function exGearId(ex) { return ex?.gear ?? CAT[ex?.cat]?.gear ?? ''; }
+function exUnit(ex) { return gearOf(exGearId(ex))?.unit || (isKg() ? 'kg' : 'lb'); }
+function exStep(ex) { const g = gearOf(exGearId(ex)); return g?.step || (exUnit(ex) === 'kg' ? 2.5 : 5); }
+function exAvailable(ex) { const g = exGearId(ex); return !g || !!gearOf(g)?.have; }
+/* a set in the unit it was read in: "25×10" · bodyweight "BW×12" · added load "+25×6" · holds "45s" */
+function fmtSet(x, ex = null) {
+  const load = ex ? exLoad(ex) : 'ext';
+  const n = x.w > 0 ? fmtN(toU(x.w, x.u || 'lb')) : '';
+  const wt = load === 'bw' ? '' : load === 'bw+' ? (n && '+' + n) : (n || '0');
+  if (x.sec) return (wt && wt !== '0' ? wt + '×' : '') + x.sec + 's';
+  return (wt || 'BW') + '×' + x.r;
+}
 
 /* ── domain queries ── */
 const exById = id => state.exercises.find(e => e.id === id);
 const sessionById = id => state.sessions.find(s => s.id === id);
 const e1rm = (w, r) => w * (1 + r / 30);
 function fmtN(n) { return Number.isInteger(n) ? String(n) : n.toFixed(1); }
-/* one set, human-readable: reps sets "185×5", timed sets "45s" (weighted hold: "25×45s") */
-function fmtSet(x) { return x.sec ? ((x.w ? fmtN(dispW(x.w)) + '×' : '') + x.sec + 's') : (fmtN(dispW(x.w)) + '×' + x.r); }
 function fmtClock(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function fmtDur(ms) { const m = Math.round(ms / 60000); return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + 'm'; }
 function sessionsDesc() { return [...state.sessions].sort((a, b) => b.date.localeCompare(a.date) || (b.startedAt || 0) - (a.startedAt || 0)); }
@@ -1123,7 +1403,7 @@ function renderPlanCard() {
   let h = `<div class="plan-card chamfer"><div class="plan-tag"><span>PLAN · ${escapeHtml(p.name)} · day ${(p.cursor % p.days.length) + 1}/${p.days.length}</span><span class="drop" data-act="drop-plan">drop</span></div><h3>${escapeHtml(day.name)}</h3>`;
   if (next) h += `<div class="plan-next">NEXT: ${next}</div>`;
   for (const t of day.exercises) {
-    h += `<div class="plan-ex">${thumbFor(exById(t.exerciseId), true)}<span class="t"><span class="n">${escapeHtml(t.name)}</span> — ${t.sets}×${t.sec ? t.sec + 's' : t.reps}${t.w ? ' @ ' + fmtN(dispW(t.w)) : ''}</span><button class="vbtn" data-act="plan-video" data-name="${escapeHtml(t.name)}">▶</button></div>`;
+    h += `<div class="plan-ex">${thumbFor(exById(t.exerciseId), true)}<span class="t"><span class="n">${escapeHtml(t.name)}</span> — ${t.sets}×${t.sec ? t.sec + 's' : t.reps}${t.w ? ' @ ' + (exLoad(exById(t.exerciseId)) === 'bw+' ? '+' : '') + fmtN(toU(t.w, exUnit(exById(t.exerciseId)))) + ' ' + exUnit(exById(t.exerciseId)) : ''}</span><button class="vbtn" data-act="plan-video" data-name="${escapeHtml(t.name)}">▶</button></div>`;
   }
   h += `</div>`;
   return h;
@@ -1134,80 +1414,25 @@ function renderPlanCard() {
    Image paths come from each entry's `images` array (name-derived dirs), never from `id`. */
 const EXDB_INDEX_URL = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
 const EXDB_IMG_PREFIX = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
-const EXDB_ALIASES = {   // canonical db targets (normalized names, verified against the live db)
-  'overhead press': 'standing military press', 'ohp': 'standing military press',
-  'rdl': 'romanian deadlift',
-  'bench press': 'barbell bench press medium grip',
-  'squat': 'barbell squat', 'deadlift': 'barbell deadlift',
-  'pull up': 'pullups', 'pull ups': 'pullups', 'pullup': 'pullups',
-  'lat pulldown': 'wide grip lat pulldown',
-  'barbell row': 'bent over barbell row',
-  'leg raise': 'flat bench lying leg raise',         // FLOOR version — "Hanging Leg Raise" needs a bar
-  'lying leg raise': 'flat bench lying leg raise',
-  'bicycle crunch': 'air bike',
-  'diamond push up': 'push ups close triceps position',
-  'pike push up': 'push ups with feet elevated',
-  'dumbbell overhead press': 'standing dumbbell press',
-  'dumbbell shoulder press': 'standing dumbbell press',
-  'lateral raise': 'side lateral raise', 'dumbbell lateral raise': 'side lateral raise',
-  'glute bridge': 'butt lift bridge', 'dumbbell glute bridge': 'butt lift bridge',
-  'goblet squat': 'goblet squat', 'dumbbell goblet squat': 'goblet squat',
-  'dumbbell row': 'bent over two dumbbell row',
-  'dumbbell calf raise': 'calf raise on a dumbbell',
-  'dumbbell romanian deadlift': 'stiff legged dumbbell deadlift',
-};
 let EXDB_INDEX = null, EXDB_FETCHING = false;
-const exdbNorm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const exdbToks = s => exdbNorm(s).split(' ').filter(Boolean).map(t => t === 'db' ? 'dumbbell' : t);
-const exdbTokEq = (a, b) => a === b || a + 's' === b || b + 's' === a || a + 'es' === b || b + 'es' === a;
-/* db `equipment` values the user's gear can serve — null when no equipment is declared */
-function exdbAllowed() {
-  const e = (state.settings.claude.equipment || '').toLowerCase();
-  if (!e) return null;
-  const a = new Set(['body only']);
-  if (e.includes('dumbbell')) a.add('dumbbell');
-  if (e.includes('barbell')) a.add('barbell');
-  if (e.includes('band')) a.add('bands');
-  if (e.includes('kettlebell')) a.add('kettlebells');
-  if (e.includes('cable') || e.includes('machine')) { a.add('cable'); a.add('machine'); }
-  if (e.includes('ball')) { a.add('exercise ball'); a.add('medicine ball'); }
-  return a;
-}
-function exdbMap() { try { return JSON.parse(localStorage.getItem('cuaderno.exdb.v2') || '{}'); } catch (e) { return {}; } }
-/* plural-tolerant token scoring: exact > squashed-equal ("pushups"≈"push up") > candidate⊆target
-   (plain variant) > target⊆candidate (qualified variant) > 2+ shared tokens; equipment the user
-   owns breaks ties so "Hanging X" never beats a floor version he can actually do */
-function exdbMatch(key) {
-  const target = EXDB_ALIASES[exdbToks(key).join(' ')] || key;
-  const tt = exdbToks(target), tsq = tt.join('');
-  const allowed = exdbAllowed();
-  let best = null, bestScore = -Infinity;
-  for (const e of EXDB_INDEX) {
-    const n = exdbNorm(e.name);
-    if (n === target) { best = e; break; }
-    const ct = exdbToks(n), csq = ct.join('');
-    const ov = ct.filter(c => tt.some(t => exdbTokEq(c, t))).length;
-    const sqEq = csq === tsq || csq === tsq + 's' || tsq === csq + 's';
-    const sqIn = csq.includes(tsq) || tsq.includes(csq);
-    const cInT = ov === ct.length, tInC = ov === tt.length;
-    if (!sqEq && !sqIn && !cInT && !tInC && ov < 2) continue;
-    let score = ov * 1000 - n.length
-      + (sqEq ? 1e6 : 0) + (cInT ? 6000 : 0) + (tInC ? 3000 : 0) + (sqIn ? 2000 : 0);
-    if (allowed && e.equipment) score += allowed.has(e.equipment) ? 1500 : -3000;
-    if (score > bestScore) { bestScore = score; best = e; }
-  }
-  if (!best || !best.images?.length) return null;
-  return { imgs: [EXDB_IMG_PREFIX + best.images[0], EXDB_IMG_PREFIX + (best.images[1] || best.images[0])], instructions: (best.instructions || []).slice(0, 6) };
-}
+const EXDB_CACHE = 'cuaderno.exdb.v3';   // v2 held FUZZY matches — many were the wrong exercise; never read it again
+/* EXACT lookup only: an exercise gets a demo iff its catalog entry names a db entry that was checked
+   by eye. Word-overlap matching produced plausible, wrong pictures ("the GIF shows X, the name says
+   Y"), and a wrong picture is worse than none — no entry → a video search. */
+function exdbMap() { try { return JSON.parse(localStorage.getItem(EXDB_CACHE) || '{}'); } catch (e) { return {}; } }
 function exdbResolve(ex) {
-  if (!ex?.name) return null;
-  const key = exdbNorm(ex.name);
+  const dbName = CAT[ex?.cat]?.exdb;
+  if (!dbName) return null;
   const map = exdbMap();
-  if (map[key]) return map[key].miss ? null : map[key];
+  if (map[dbName]) return map[dbName].miss ? null : map[dbName];
   if (EXDB_INDEX) {
-    const entry = exdbMatch(key);
-    map[key] = entry || { miss: true };   // cache misses too (only once the index was consulted)
-    try { localStorage.setItem('cuaderno.exdb.v2', JSON.stringify(map)); } catch (e) {}
+    const e = EXDB_INDEX.find(x => x.name === dbName);
+    const entry = e?.images?.length
+      ? { imgs: [EXDB_IMG_PREFIX + e.images[0], EXDB_IMG_PREFIX + (e.images[1] || e.images[0])], instructions: (e.instructions || []).slice(0, 6) }
+      : null;
+    if (!entry) losWarn('exdb.missing', { dbName });   // the db renamed an entry we pinned — say so, don't guess
+    map[dbName] = entry || { miss: true };
+    try { localStorage.setItem(EXDB_CACHE, JSON.stringify(map)); } catch (e2) {}
     return entry;
   }
   exdbFetch();   // async; the next render upgrades the tile
@@ -1270,9 +1495,11 @@ function buildRows(exId, target = null) {
     const ps = prev?.sets[i] || prev?.sets[prev.sets.length - 1];
     // a plan target is authoritative about the set type; otherwise history decides
     const sec = target ? (target.sec || null) : (ps?.sec || null);
-    if (sec) rows.push({ w: target?.w ?? ps?.w ?? 0, sec, done: false });
+    // bodyweight moves carry no weight; an unknown opener is 0 — a guessed default gets logged as fact
+    const w0 = exLoad(exById(exId)) === 'bw' ? 0 : (target?.w ?? ps?.w ?? 0);
+    if (sec) rows.push({ w: w0, sec, done: false });
     else rows.push({
-      w: target?.w ?? ps?.w ?? canonW(isKg() ? 20 : 45),
+      w: w0,
       r: target?.reps ?? ps?.r ?? 8,
       done: false,
     });
@@ -1448,7 +1675,7 @@ function mediaPanel(ex) {
     <span class="big">${escapeHtml((ex?.name || '?')[0])}</span>
     <div class="row">
       <button data-act="find-video" data-id="${ex?.id}">▶ find video</button>
-      <button data-act="ex-edit" data-id="${ex?.id}">✎ paste link</button>
+      <button data-act="ex-edit" data-id="${ex?.id}">✎ edit</button>
     </div>
   </div>`;
   const img = m?.type === 'imgs'
@@ -1466,7 +1693,7 @@ function renderBrief() {
   aw.exercises.forEach((wx, xi) => {
     const ex = exById(wx.exerciseId);
     const live = wx.rows.filter(r => !r.skipped);
-    const target = `${live.length}×${live[0]?.sec ? live[0].sec + 's' : live[0]?.r ?? 8}${live[0]?.w ? ' @ ' + fmtN(dispW(live[0].w)) : ''}`;
+    const target = `${live.length}×${live[0]?.sec ? live[0].sec + 's' : live[0]?.r ?? 8}${live[0]?.w ? ' @ ' + (exLoad(ex) === 'bw+' ? '+' : '') + fmtN(toU(live[0].w, exUnit(ex))) + ' ' + exUnit(ex) : ''}`;
     body += `<div class="brief-row" style="animation-delay:${0.04 * xi}s">${thumbFor(ex)}
       <span class="bi"><span class="n">${escapeHtml(ex?.name || '?')}</span><span class="t">${target}</span></span>
       <button class="vbtn" data-act="brief-swap" data-xi="${xi}" title="swap exercise">⇄</button>
@@ -1501,15 +1728,13 @@ function renderSet() {
   let body = `<div class="player-body">` + mediaPanel(ex);
   body += `<div class="px-name">${escapeHtml(ex?.name || '?')}</div>`;
   body += `<div class="set-progress"><span class="sp">SET ${ri + 1}/${wx.rows.length}</span><span class="el" id="set-elapsed"></span></div>`;
-  if (prev) body += `<div class="px-last">LAST: <span class="v">${ps ? fmtSet(ps) : prev.sets.length + ' sets'}</span> (${prev.date.slice(5)})</div>`;
+  if (prev) body += `<div class="px-last">LAST: <span class="v">${ps ? fmtSet(ps, ex) : prev.sets.length + ' sets'}</span> (${prev.date.slice(5)})</div>`;
   body += `<div class="set-table">
-    <span class="th">SET</span><span class="th">PREV</span><span class="th"></span><span class="th">${unitLbl().toUpperCase()}</span><span class="th"></span><span class="th">${row.sec ? 'SEC' : 'REPS'}</span><span class="th"></span>
+    <span class="th">SET</span><span class="th">PREV</span><span class="th"></span>${wHead(ex)}<span class="th"></span><span class="th">${row.sec ? 'SEC' : 'REPS'}</span><span class="th"></span>
     <div class="tr" data-xi="${xi}" data-ri="${ri}">
       <span class="td sn">${ri + 1}</span>
-      <span class="td prev" data-act="copy-prev" data-xi="${xi}" data-ri="${ri}">${ps ? (ps.sec ? `<span>${ps.sec}s</span>` : `<span>${fmtN(dispW(ps.w))}</span><span>×${ps.r}</span>`) : '—'}</span>
-      <button class="st" data-act="step-w" data-d="-1" data-xi="${xi}" data-ri="${ri}">−</button>
-      <span class="td"><input inputmode="decimal" data-fld="w" data-xi="${xi}" data-ri="${ri}" value="${fmtN(dispW(row.w))}"></span>
-      <button class="st" data-act="step-w" data-d="1" data-xi="${xi}" data-ri="${ri}">+</button>
+      ${prevCell(ps, ex, xi, ri)}
+      ${wCells(ex, row, xi, ri, false)}
       <span class="td">${row.sec
         ? `<input inputmode="numeric" data-fld="s" data-xi="${xi}" data-ri="${ri}" value="${row.sec}"${aw.hold ? ' readonly' : ''}>`
         : `<input inputmode="numeric" data-fld="r" data-xi="${xi}" data-ri="${ri}" value="${row.r}">`}</span>
@@ -1549,7 +1774,7 @@ function renderRestScreen() {
     upnext = `<div class="upnext-card chamfer">${thumbFor(ex)}
       <span class="uc"><span class="tag">${newEx ? 'NEW EXERCISE' : 'UP NEXT'}</span>
       <span class="n">${escapeHtml(ex?.name || '?')}</span>
-      <span class="d">SET ${cur.ri + 1}/${wx.rows.length} @ ${fmtSet(row)}</span></span>
+      <span class="d">SET ${cur.ri + 1}/${wx.rows.length} @ ${fmtSet({ ...row, u: exUnit(ex) }, ex)}</span></span>
     </div>`;
   }
   viewRoot.innerHTML = playerHead('rest') + `<div class="player-body"><div class="rest-wrap">
@@ -1582,18 +1807,16 @@ function renderEdit() {
   if (prev) {
     const withReps = prev.sets.filter(x => x.r);
     const best = withReps.length ? withReps.reduce((a, b) => e1rm(b.w, b.r) > e1rm(a.w, a.r) ? b : a) : prev.sets[prev.sets.length - 1];
-    body += `<div class="px-last">LAST: <span class="v">${prev.sets.length}×${best.sec ? best.sec + 's' : best.r + ' @ ' + fmtN(dispW(best.w))}</span> (${prev.date.slice(5)})</div>`;
+    body += `<div class="px-last">LAST: <span class="v">${prev.sets.length} sets · best ${fmtSet(best, ex)}</span> (${prev.date.slice(5)})</div>`;
   } else body += `<div class="px-last">first time — set your opener</div>`;
   body += `<div class="set-table">
-    <span class="th">SET</span><span class="th">PREV</span><span class="th"></span><span class="th">${unitLbl().toUpperCase()}</span><span class="th"></span><span class="th">${wx.rows[0]?.sec ? 'SEC' : 'REPS'}</span><span class="th"></span>`;
+    <span class="th">SET</span><span class="th">PREV</span><span class="th"></span>${wHead(ex)}<span class="th"></span><span class="th">${wx.rows[0]?.sec ? 'SEC' : 'REPS'}</span><span class="th"></span>`;
   wx.rows.forEach((row, ri) => {
     const ps = prev?.sets[ri];
     body += `<div class="tr${row.done ? ' done' : ''}" data-xi="${xi}" data-ri="${ri}">
       <span class="td sn">${row.skipped ? '·' : ri + 1}</span>
-      <span class="td prev" data-act="copy-prev" data-xi="${xi}" data-ri="${ri}">${ps ? (ps.sec ? `<span>${ps.sec}s</span>` : `<span>${fmtN(dispW(ps.w))}</span><span>×${ps.r}</span>`) : '—'}</span>
-      <button class="st" data-act="step-w" data-d="-1" data-xi="${xi}" data-ri="${ri}">−</button>
-      <span class="td"><input inputmode="decimal" data-fld="w" data-xi="${xi}" data-ri="${ri}" value="${fmtN(dispW(row.w))}" ${row.done ? 'readonly' : ''}></span>
-      <button class="st" data-act="step-w" data-d="1" data-xi="${xi}" data-ri="${ri}">+</button>
+      ${prevCell(ps, ex, xi, ri)}
+      ${wCells(ex, row, xi, ri, row.done)}
       <span class="td">${row.sec
         ? `<input inputmode="numeric" data-fld="s" data-xi="${xi}" data-ri="${ri}" value="${row.sec}" ${row.done ? 'readonly' : ''}>`
         : `<input inputmode="numeric" data-fld="r" data-xi="${xi}" data-ri="${ri}" value="${row.r}" ${row.done ? 'readonly' : ''}>`}</span>
@@ -1603,6 +1826,28 @@ function renderEdit() {
   body += `</div><button class="wk-add-set" data-act="add-set" data-xi="${xi}">+ add set</button></div>`;
   viewRoot.innerHTML = playerHead('edit') + body + ovStrip() + playerNav();
   wkTick();
+}
+/* the weight column, per exercise: the number on THIS equipment, in ITS unit (tap the unit to
+   correct it) · bodyweight moves have no weight column · 'bw+' logs only what's added */
+function wHead(ex) {
+  const load = exLoad(ex);
+  if (load === 'bw') return `<span class="th"></span>`;
+  const u = exUnit(ex).toUpperCase(), g = exGearId(ex);
+  const lbl = (load === 'bw+' ? '+' : '') + u;
+  return g && gearOf(g)?.unit ? `<button class="th unit-flip" data-act="unit-flip" data-g="${g}" title="wrong unit? tap">${lbl} ⇄</button>` : `<span class="th">${lbl}</span>`;
+}
+function wCells(ex, row, xi, ri, ro) {
+  if (exLoad(ex) === 'bw') return `<span class="st st-off"></span><span class="td bw-cell">BW</span><span class="st st-off"></span>`;
+  return `<button class="st" data-act="step-w" data-d="-1" data-xi="${xi}" data-ri="${ri}">−</button>
+      <span class="td"><input inputmode="decimal" data-fld="w" data-xi="${xi}" data-ri="${ri}" value="${fmtN(toU(row.w || 0, exUnit(ex)))}"${ro ? ' readonly' : ''}></span>
+      <button class="st" data-act="step-w" data-d="1" data-xi="${xi}" data-ri="${ri}">+</button>`;
+}
+function prevCell(ps, ex, xi, ri) {
+  if (!ps) return `<span class="td prev">—</span>`;
+  const bw = exLoad(ex) === 'bw';
+  const w = ps.w > 0 ? fmtN(toU(ps.w, ps.u || 'lb')) : (bw ? '' : '0');
+  const body = ps.sec ? `<span>${ps.sec}s</span>` : `${w ? `<span>${w}</span>` : ''}<span>×${ps.r}</span>`;
+  return `<span class="td prev" data-act="copy-prev" data-xi="${xi}" data-ri="${ri}">${body}</span>`;
 }
 function ovStrip() {
   const aw = state.activeWorkout;
@@ -1639,7 +1884,7 @@ function commitRowInput(input) {
   const aw = state.activeWorkout; if (!aw) return;
   const row = aw.exercises[+input.dataset.xi]?.rows[+input.dataset.ri];
   if (!row || row.done) return;
-  if (input.dataset.fld === 'w') { const v = parseFloat(input.value); if (v >= 0) row.w = canonW(v); }
+  if (input.dataset.fld === 'w') { const v = parseFloat(input.value); if (v >= 0) row.w = fromU(v, exUnit(exById(aw.exercises[+input.dataset.xi].exerciseId))); }
   else if (input.dataset.fld === 's') { const v = parseInt(input.value, 10); if (v > 0) row.sec = Math.min(3600, v); }
   else { const v = parseInt(input.value, 10); if (v > 0) row.r = Math.min(100, v); }
   save({ push: false });
@@ -1654,7 +1899,8 @@ function checkRow(xi, ri) {
   let en = s.entries.find(e => e.exerciseId === wx.exerciseId);
   if (!en) { en = { exerciseId: wx.exerciseId, sets: [] }; s.entries.push(en); }
   const ts = Date.now();
-  const set = { w: Math.round(row.w * 100) / 100, ts };
+  const exL = exById(wx.exerciseId);
+  const set = { w: exLoad(exL) === 'bw' ? 0 : Math.round(row.w * 100) / 100, u: exUnit(exL), ts };
   if (row.sec) set.sec = row.sec; else set.r = row.r;
   if (row.rpe) set.rpe = row.rpe;
   const prevBest = row.sec ? 0 : bestE1rmBefore(wx.exerciseId, ts);   // PRs are e1RM-based — rep sets only
@@ -1663,7 +1909,7 @@ function checkRow(xi, ri) {
   row.done = true; row.ts = ts; row.pr = set.pr;
   startRest();
   save();
-  if (set.pr) toast(`⚡ PR — e1RM ${fmtN(dispW(e1rm(set.w, set.r)))} ${unitLbl()}`, false, true);
+  if (set.pr) toast(`⚡ PR — e1RM ${fmtN(toU(e1rm(set.w, set.r), set.u))} ${set.u}`, false, true);
   // surgical DOM update: this row + meta + NEXT flash + overview chip
   updateRowDom(xi, ri);
 }
@@ -1703,7 +1949,7 @@ function addSet(xi) {
   const wx = aw.exercises[xi];
   const last = wx.rows[wx.rows.length - 1];
   if (last?.sec) wx.rows.push({ w: last.w ?? 0, sec: last.sec, done: false });
-  else wx.rows.push({ w: last?.w ?? canonW(isKg() ? 20 : 45), r: last?.r ?? 8, done: false });
+  else wx.rows.push({ w: last?.w ?? 0, r: last?.r ?? 8, done: false });
   save({ push: false });
   renderView();
 }
@@ -1754,7 +2000,7 @@ function renderSummary(sessionId) {
   </div>`;
   if (prSets.length) {
     html += `<div class="sum-prs"><div class="sec-label"><span style="color:var(--hot)">⚡ PERSONAL RECORDS</span></div><div class="set-chips">` +
-      prSets.map(p => `<span class="set-chip pr">${escapeHtml(p.ex?.name || '?')} ${fmtSet(p.x)}</span>`).join('') + `</div></div>`;
+      prSets.map(p => `<span class="set-chip pr">${escapeHtml(p.ex?.name || '?')} ${fmtSet(p.x, p.ex)}</span>`).join('') + `</div></div>`;
   }
   if (planDay) html += `<div class="sec-label"><span>NEXT UP: ${escapeHtml(state.plan.days[state.plan.cursor % state.plan.days.length].name)}</span></div>`;
   html += `<button class="big-add ghost chamfer" data-act="debrief-session" data-id="${s.id}" style="margin-top:18px;font-size:20px;padding:13px">🎙 DEBRIEF — HOW DID IT GO?</button>`;
@@ -1997,7 +2243,7 @@ function renderSessionDetail(id) {
     const ton = en.sets.reduce((t, x) => t + x.w * x.r, 0);
     html += `<div class="block" style="animation-delay:${0.05 * i}s">
       <div class="bk-head"><span class="bk-name" data-act="open-exercise" data-id="${ex.id}" style="cursor:pointer">${escapeHtml(ex.name)}</span><span class="bk-meta">${en.sets.length} sets · ${fmtN(dispW(ton))} ${unitLbl()}</span></div>
-      <div class="set-chips">${en.sets.map(x => `<span class="set-chip${x.pr ? ' pr' : ''}">${fmtSet(x)}${x.rpe ? '@' + x.rpe : ''}</span>`).join('')}</div>
+      <div class="set-chips">${en.sets.map(x => `<span class="set-chip${x.pr ? ' pr' : ''}">${fmtSet(x, ex)}${x.rpe ? '@' + x.rpe : ''}</span>`).join('')}</div>
     </div>`;
   });
   viewRoot.innerHTML = html;
@@ -2005,23 +2251,33 @@ function renderSessionDetail(id) {
 VIEWS.session = renderSessionDetail;
 
 /* ═══ EXERCISES ═══ */
-function buildExerciseList(q, actName) {
+function buildExerciseList(q, actName, catAct = null) {
   const { lastTs, freq } = exScore();
-  const list = state.exercises.filter(e => !e.archived && e.name.toLowerCase().includes(q.toLowerCase()))
-    .sort((a, b) => (lastTs[b.id] || 0) - (lastTs[a.id] || 0) || (freq[b.id] || 0) - (freq[a.id] || 0) || a.name.localeCompare(b.name));
-  return list.map(e => {
+  const nq = catNorm(q);
+  const hit = e => !nq || catNorm(e.name).includes(nq) || (CAT[e.cat]?.aliases || []).some(a => catNorm(a).includes(nq));
+  const list = state.exercises.filter(e => !e.archived && hit(e))
+    .sort((a, b) => exAvailable(b) - exAvailable(a) || (lastTs[b.id] || 0) - (lastTs[a.id] || 0) || (freq[b.id] || 0) - (freq[a.id] || 0) || a.name.localeCompare(b.name));
+  let h = list.map(e => {
     const last = lastSetsFor(e.id);
-    const lastTxt = last ? `${fmtSet(last.sets[last.sets.length - 1])} · ${last.date.slice(5)}` : 'never logged';
-    return `<div class="pick-row" data-act="${actName}" data-id="${e.id}">${thumbFor(e)}<span class="nm">${escapeHtml(e.name)}</span><span class="last">${lastTxt}</span><button class="vbtn" data-act="ex-video" data-id="${e.id}">▶</button></div>`;
+    const lastTxt = (exAvailable(e) ? '' : 'not in this gym · ') + (last ? `${fmtSet(last.sets[last.sets.length - 1], e)} · ${last.date.slice(5)}` : 'never logged');
+    return `<div class="pick-row${exAvailable(e) ? '' : ' off'}" data-act="${actName}" data-id="${e.id}">${thumbFor(e)}<span class="nm">${escapeHtml(e.name)}</span><span class="last">${lastTxt}</span><button class="vbtn" data-act="ex-video" data-id="${e.id}">▶</button></div>`;
   }).join('');
+  // the rest of the catalog this gym can serve — every exercise is reachable, with its checked demo
+  if (catAct) {
+    const mine = new Set(state.exercises.map(e => e.cat).filter(Boolean));
+    const more = CATALOG.filter(c => !mine.has(c.key) && (!c.gear || gearOf(c.gear)?.have) && (!nq || catNorm(c.name).includes(nq) || c.aliases.some(a => catNorm(a).includes(nq))));
+    if (more.length) h += `<div class="sec-label" style="margin-top:14px"><span>MORE FOR THIS GYM</span></div>` + more.map(c =>
+      `<div class="pick-row" data-act="${catAct}" data-cat="${c.key}">${thumbFor({ cat: c.key, name: c.name })}<span class="nm">${escapeHtml(c.name)}</span><span class="last">${c.load === 'bw' ? 'bodyweight' : escapeHtml(gearOf(c.gear)?.name.toLowerCase() || 'bodyweight + load')}</span><span class="vbtn" style="color:var(--accent)">＋</span></div>`).join('');
+  }
+  return h;
 }
 function renderExercises() {
   let html = `<div class="screen-head"><h2>EXERCISES<span style="color:var(--accent)">.</span></h2><span class="sub">${state.exercises.filter(e => !e.archived).length} movements</span></div>
   <input class="picker-search" id="ex-search" placeholder="search…" autocomplete="off">
-  <div id="ex-list">${buildExerciseList('', 'open-exercise')}</div>`;
+  <div id="ex-list">${buildExerciseList('', 'open-exercise', 'add-catalog')}</div>`;
   viewRoot.innerHTML = html;
   document.getElementById('ex-search').addEventListener('input', e => {
-    document.getElementById('ex-list').innerHTML = buildExerciseList(e.target.value, 'open-exercise');
+    document.getElementById('ex-list').innerHTML = buildExerciseList(e.target.value, 'open-exercise', 'add-catalog');
   });
 }
 VIEWS.exercises = renderExercises;
@@ -2029,6 +2285,7 @@ function renderExerciseDetail(exId) {
   const ex = exById(exId);
   if (!ex) { nav('exercises'); return; }
   let bestE = 0, heaviest = 0, bestVol = 0, recent = [];
+  const xu = exUnit(ex);
   for (const s of sessionsDesc()) {
     const en = s.entries.find(e => e.exerciseId === exId);
     if (!en || !en.sets.length) continue;
@@ -2040,15 +2297,15 @@ function renderExerciseDetail(exId) {
   let html = `<div class="screen-head"><button class="back" data-act="goto-exercises">←</button><h2>${escapeHtml(ex.name)}</h2>
     <span class="sub"><button class="vbtn" data-act="ex-video" data-id="${ex.id}">▶ demo</button> <button class="vbtn" data-act="ex-edit" data-id="${ex.id}">✎</button></span></div>
   <div class="rec-grid">
-    <div class="rec-cell"><div class="n">${bestE ? fmtN(dispW(bestE)) : '—'}</div><div class="l">best e1RM</div></div>
-    <div class="rec-cell"><div class="n">${heaviest ? fmtN(dispW(heaviest)) : '—'}</div><div class="l">heaviest set</div></div>
-    <div class="rec-cell"><div class="n">${bestVol ? fmtN(dispW(bestVol)) : '—'}</div><div class="l">best volume</div></div>
+    <div class="rec-cell"><div class="n">${bestE ? fmtN(toU(bestE, xu)) : '—'}</div><div class="l">best e1RM · ${xu}</div></div>
+    <div class="rec-cell"><div class="n">${heaviest ? fmtN(toU(heaviest, xu)) : '—'}</div><div class="l">heaviest · ${xu}</div></div>
+    <div class="rec-cell"><div class="n">${bestVol ? fmtN(toU(bestVol, xu)) : '—'}</div><div class="l">best volume</div></div>
   </div>
   <div class="stat-block"><h4>e1RM trend</h4><canvas id="cv-e1rm"></canvas></div>
   <div class="sec-label"><span>RECENT</span></div>`;
   recent.forEach(({ s, en }) => {
     html += `<div class="block"><div class="bk-head"><span class="bk-name" style="font-size:15px">${s.date}</span></div>
-      <div class="set-chips">${en.sets.map(x => `<span class="set-chip${x.pr ? ' pr' : ''}">${fmtSet(x)}${x.rpe ? '@' + x.rpe : ''}</span>`).join('')}</div></div>`;
+      <div class="set-chips">${en.sets.map(x => `<span class="set-chip${x.pr ? ' pr' : ''}">${fmtSet(x, ex)}${x.rpe ? '@' + x.rpe : ''}</span>`).join('')}</div></div>`;
   });
   viewRoot.innerHTML = html;
   requestAnimationFrame(() => drawE1rmChart(exId));
@@ -2102,7 +2359,7 @@ function drawE1rmChart(exId) {
     const en = s.entries.find(e => e.exerciseId === exId);
     const reps = en?.sets.filter(x => x.r) || [];
     if (!reps.length) continue;
-    e1.push({ x: new Date(s.date).getTime(), y: Math.max(...reps.map(x => dispW(e1rm(x.w, x.r)))) });
+    e1.push({ x: new Date(s.date).getTime(), y: Math.max(...reps.map(x => toU(e1rm(x.w, x.r), exUnit(exById(exId))))) });
   }
   drawSeries(document.getElementById('cv-e1rm'), [{ pts: e1, color: cAcc }]);
 }
@@ -2140,7 +2397,7 @@ function coachContext() {
     for (const s of recent) {
       const parts = s.entries.map(en => {
         const ex = exById(en.exerciseId);
-        return `${ex?.name || '?'} ${en.sets.map(x => `${fmtSet(x)}${x.rpe ? '@' + x.rpe : ''}`).join(' ')}`;
+        return `${ex?.name || '?'} (${exLoad(ex) === 'bw' ? 'bodyweight' : exLoad(ex) === 'bw+' ? 'bodyweight + added ' + exUnit(ex) : exUnit(ex)}) ${en.sets.map(x => `${fmtSet(x, ex)}${x.rpe ? '@' + x.rpe : ''}`).join(' ')}`;
       });
       lines.push(`- ${s.date}: ${parts.join(' | ') || '(empty)'}`);
     }
@@ -2172,23 +2429,31 @@ function coachContext() {
   return lines.join('\n');
 }
 function appBuildClaudeSystem() {
-  const eq = (state.settings.claude.equipment || '').trim();
+  const notes = (state.settings.claude.equipment || '').trim();
+  const have = gearList().filter(g => g.have);
+  const usable = CATALOG.filter(c => !c.gear || gearOf(c.gear)?.have).map(c => c.name);
   return [
-    // equipment goes FIRST — top-of-prompt constraints beat buried ones
-    ...(eq ? [
-      '# HARD CONSTRAINT — AVAILABLE EQUIPMENT',
-      `Leandro ONLY has: ${eq}. Bodyweight is always available.`,
-      'Every exercise you propose, swap in, or keep in a plan MUST be doable with ONLY that equipment. Never program machines, cables, barbells, or anything not listed above. If his current plan or an exercise he mentions violates this, say so and propose a compliant replacement.',
-      '',
-    ] : []),
+    // the gym goes FIRST — top-of-prompt constraints beat buried ones. acceptPlan re-checks every
+    // exercise against this same list in code; the prompt is the ask, the code is the gate.
+    '# HARD CONSTRAINT — THE GYM',
+    'Leandro trains here. This is ALL the equipment there is (gear id: description):',
+    ...have.map(g => `- ${g.id}: ${g.name}${g.unit ? ` — numbers read in ${g.unit}, steps of ${g.step}` : ''}${g.note ? ` (${g.note})` : ''}`),
+    'Bodyweight is always available. Nothing else exists here — no barbell, no chest-press or shoulder-press machine, no smith machine. Never program equipment that is not on this list; if an exercise he mentions needs it, say so and swap in the closest movement that fits.',
+    ...(notes ? ['Extra notes from Leandro about the gym: ' + notes] : []),
+    '',
     state.settings.claudeRules || DEFAULT_CLAUDE_RULES,
     '',
+    '## Naming exercises',
+    'Always use the most common English name (e.g. "Dumbbell Row", never "DB Row"). When one of these fits, use it EXACTLY — the app has checked demos for these names: ' + usable.join('; ') + '.',
+    'You may program anything else the gym supports — the app just shows a video search instead of a demo for it.',
+    '',
     '## Proposing a program',
-    `When (and only when) you propose a training program, include EXACTLY ONE fenced \`\`\`json block with this shape (weights in ${state.settings.units}, omit startWeight if unknown):`,
-    '{"type":"plan","name":"<short name>","days":[{"name":"<e.g. PUSH A>","exercises":[{"name":"<exercise>","sets":4,"reps":8,"startWeight":135,"videoQuery":"<good youtube search for form>"}]}]}',
-    'For TIMED holds (plank, dead hang, wall sit…) use "seconds" instead of "reps", e.g. {"name":"Plank","sets":3,"seconds":45} — the app runs a countdown timer for these.',
+    'When (and only when) you propose a training program, include EXACTLY ONE fenced ```json block with this shape:',
+    '{"type":"plan","name":"<short name>","days":[{"name":"<e.g. PUSH A>","exercises":[{"name":"Dumbbell Row","gear":"dumbbells","load":"ext","sets":4,"reps":10,"startWeight":30,"videoQuery":"<good youtube search for form>"}]}]}',
+    'Every exercise carries "gear" (ONE gear id from the list above, or "" for none) and "load": "bw" = bodyweight only, no weight at all (push-ups, planks, leg raises) · "bw+" = bodyweight plus optional added weight, startWeight is the ADDED weight (weighted pull-ups, dips) · "ext" = the number on the dumbbell or the pin. startWeight is in THAT gear\'s unit; omit it when unknown and always for "bw".',
+    'For TIMED holds (plank, dead hang, wall sit…) use "seconds" instead of "reps", e.g. {"name":"Plank","gear":"","load":"bw","sets":3,"seconds":45} — the app runs a countdown timer for these.',
     'Optionally add "schedule":["mon","tue","thu","fri"] — the weekdays he trains (keep his current schedule unless he asks to change it).',
-    'Keep normal coaching prose around the block. 2–6 days. Reuse his existing exercise names when they fit.',
+    'Keep normal coaching prose around the block. 2–6 days.',
     '',
     '## His training data',
     coachContext(),
@@ -2248,12 +2513,18 @@ function renderCoach() {
   if (!root) return;
   root.innerHTML = COACH.msgs.map((m, i) => {
     if (m.role === 'plan') {
-      return `<div class="plan-accept chamfer"><h4>${escapeHtml(m.plan.name)}</h4>${m.plan.days.map(d => `<div class="pa-day"><strong>${escapeHtml(d.name)}</strong> — ${d.exercises.map(e => `${escapeHtml(e.name)} ${e.sets}×${planSec(e) ? planSec(e) + 's' : e.reps}`).join(', ')}</div>`).join('')}<div style="margin-top:10px;display:flex;gap:8px"><button class="btn-primary chamfer" data-accept="${i}">ACCEPT PLAN</button></div></div>`;
+      return `<div class="plan-accept chamfer"><h4>${escapeHtml(m.plan.name)}</h4>${planBody(m.plan)}<div style="margin-top:10px;display:flex;gap:8px"><button class="btn-primary chamfer" data-accept="${i}">ACCEPT PLAN</button></div></div>`;
     }
     return `<div class="msg ${m.role === 'user' ? 'me' : 'ai'}${m.thinking ? ' thinking' : ''}">${escapeHtml(m.text)}</div>`;
   }).join('');
   root.querySelectorAll('[data-accept]').forEach(b => b.addEventListener('click', () => acceptPlan(COACH.msgs[+b.dataset.accept].plan)));
   root.scrollTop = root.scrollHeight;   // the messages container is the scroller (overlay layout)
+}
+/* a proposed plan as he'll see it: catalog names, and — before he accepts — any exercise the gym can't serve */
+function planBody(p) {
+  const days = (p.days || []).map(d => `<div class="pa-day"><strong>${escapeHtml(d.name)}</strong> — ${(d.exercises || []).map(e => `${escapeHtml(planExercise(e).name)} ${e.sets}×${planSec(e) ? planSec(e) + 's' : e.reps}`).join(', ')}</div>`).join('');
+  const warn = planWarnings(p);
+  return days + (warn.length ? `<div class="pa-warn">⚠ ${warn.map(escapeHtml).join(' · ')}</div>` : '');
 }
 function extractPlan(text) {
   const m = text.match(/```json\s*([\s\S]*?)```/);
@@ -2271,19 +2542,42 @@ function planSec(t) {   // timed target: explicit "seconds", or a reps string li
   const m = String(t.reps || '').match(/^(\d+)\s*s(ec)?/i);
   return m ? Math.min(3600, +m[1]) : 0;
 }
+/* Coach names → the catalog, deterministically (name or alias), so "DB Row" and "Dumbbell Row" are
+   ONE exercise with one history. Anything outside the catalog becomes a custom exercise that must
+   name a gear id this app knows. */
+function planExercise(t) {
+  const c = catFor(t.name);
+  if (c) return { cat: c.key, name: c.name, load: c.load, gear: c.gear };
+  const gear = GEAR_DEFAULTS[t.gear] ? t.gear : '';
+  const load = ['bw', 'bw+', 'ext'].includes(t.load) ? t.load : (gear || t.startWeight ? 'ext' : 'bw');
+  return { cat: null, name: String(t.name || '?').slice(0, 60), load, gear, badGear: t.gear && !GEAR_DEFAULTS[t.gear] ? String(t.gear) : null };
+}
+function planWarnings(p) {
+  const out = new Set();
+  for (const d of p.days || []) for (const t of d.exercises || []) {
+    const pe = planExercise(t);
+    if (pe.badGear) out.add(`${pe.name}: unknown equipment “${pe.badGear}”`);
+    else if (pe.gear && !gearOf(pe.gear)?.have) out.add(`${pe.name} needs a ${gearOf(pe.gear).name.toLowerCase()} — not in your gym`);
+  }
+  return [...out];
+}
 function acceptPlan(p) {
   const days = p.days.map(d => ({
     id: uid(), name: String(d.name || 'DAY').slice(0, 40),
     exercises: (d.exercises || []).map(t => {
-      let ex = state.exercises.find(e => e.name.toLowerCase() === String(t.name).toLowerCase());
+      const pe = planExercise(t);
+      let ex = pe.cat ? state.exercises.find(e => e.cat === pe.cat) : state.exercises.find(e => !e.cat && catNorm(e.name) === catNorm(pe.name));
       if (!ex) {
-        ex = { id: uid(), name: String(t.name).slice(0, 60), step: 5, videoQuery: t.videoQuery || (t.name + ' exercise form'), createdAt: Date.now() };
+        ex = pe.cat ? { id: uid(), name: pe.name, cat: pe.cat, createdAt: Date.now() }
+                    : { id: uid(), name: pe.name, load: pe.load, gear: pe.gear, createdAt: Date.now() };
         state.exercises.push(ex);
-      } else if (t.videoQuery && !ex.videoUrl) ex.videoQuery = t.videoQuery;
+      }
+      delete ex.archived;
+      if (t.videoQuery && !ex.videoUrl) ex.videoQuery = t.videoQuery;
       const sec = planSec(t);
+      const w = t.startWeight && exLoad(ex) !== 'bw' ? Math.round(fromU(+t.startWeight, exUnit(ex)) * 100) / 100 : null;
       return { exerciseId: ex.id, name: ex.name, sets: +t.sets || 3,
-               reps: sec ? null : (+t.reps || 8), sec: sec || null,
-               w: t.startWeight ? Math.round(canonW(+t.startWeight) * 100) / 100 : null,
+               reps: sec ? null : (+t.reps || 8), sec: sec || null, w,
                videoQuery: t.videoQuery || null };
     }),
   }));
@@ -2293,7 +2587,8 @@ function acceptPlan(p) {
     : (state.plan?.schedule || null);   // plan adjustments keep the existing training days unless coach says otherwise
   state.plan = { id: uid(), name: String(p.name || 'PROGRAM').slice(0, 40), source: 'coach', createdAt: Date.now(), days, cursor: 0, schedule: schedule?.length ? schedule : null };
   save();
-  toast('plan accepted — ' + days.length + ' days. Hit START WORKOUT.');
+  const warn = planWarnings(p);
+  toast(warn.length ? `plan accepted — ⚠ ${warn.length} exercise${warn.length > 1 ? 's' : ''} need gear you don't have` : 'plan accepted — ' + days.length + ' days. Hit START WORKOUT.', !!warn.length);
   nav('home');
   setTimeout(() => offlinePrefetch(true), 1500);   // new plan → cache its demo frames for the gym basement
 }
@@ -2407,9 +2702,13 @@ let CLAUDE_VIA = null;
 // and the coach answered "add your API key in settings first" with a live helper sitting right there.
 // To turn the coach off on the Mac now: Billing → "API key only" (with no key saved).
 function isClaudeEnabled() { return canUseApi() || canUseSub(); }
-async function callClaudeChat(messages, maxTokens = 1400) {
+async function callClaudeChat(messages, maxTokens = 4000) {   // thinking tokens count against maxTokens
   if (canUseSub()) {
-    try { const t = await callClaudeSub(messages, maxTokens); CLAUDE_VIA = 'sub'; renderClaudeStatus(); return t; }
+    try {
+      const t = await callClaudeSub(messages, maxTokens);
+      if (!t.trim()) throw new Error('helper stream ended with no text');
+      CLAUDE_VIA = 'sub'; renderClaudeStatus(); return t;
+    }
     catch (e) {
       // 'sub' is a hard commitment: surface the failure instead of silently spending API credits.
       if (claudeMode() === 'sub') { CLAUDE_VIA = null; renderClaudeStatus(); throw new Error('Max-plan helper unreachable (' + e.message + ') — is los-music-helper running?'); }
@@ -2431,7 +2730,15 @@ async function callClaudeChat(messages, maxTokens = 1400) {
   }
   const data = await res.json();
   CLAUDE_VIA = 'api'; renderClaudeStatus();
-  return data.content?.[0]?.text || '(empty response)';
+  // Sonnet 5 / Opus 5 think by default when `thinking` is omitted, so content[0] is a thinking
+  // block. Reading content[0].text printed "(empty response)" as if it were Coach's answer — a
+  // failure dressed as a success. Join the text blocks; an empty reply is an error that names why.
+  return claudeReplyText(data);
+}
+function claudeReplyText(data) {
+  const text = (data?.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+  if (!text) throw new Error('coach sent no text (stop_reason: ' + (data?.stop_reason || 'unknown') + ')');
+  return text;
 }
 
 /* ═══ picker (sheet) — adds exercises to the live workout (or swaps one, from BRIEF) ═══ */
@@ -2455,9 +2762,16 @@ function openPicker() {
   setTimeout(() => document.getElementById('picker-search').focus(), 60);
 }
 function renderPicker(q) {
-  let h = buildExerciseList(q, 'pick-exercise');
-  if (q.trim()) h += `<div class="pick-row" data-act="create-exercise" data-name="${escapeHtml(q.trim())}"><span class="nm" style="color:var(--accent)">+ create “${escapeHtml(q.trim())}”</span></div>`;
+  let h = buildExerciseList(q, 'pick-exercise', 'pick-catalog');
+  if (q.trim() && !catFor(q)) h += `<div class="pick-row" data-act="create-exercise" data-name="${escapeHtml(q.trim())}"><span class="nm" style="color:var(--accent)">+ create “${escapeHtml(q.trim())}”</span></div>`;
   document.getElementById('picker-list').innerHTML = h || '<div style="color:var(--ink-faint);padding:20px;text-align:center">type to create an exercise</div>';
+}
+/* one library exercise per catalog entry — adding a catalog move you already have returns yours */
+function exForCat(key) {
+  let ex = state.exercises.find(e => e.cat === key);
+  if (!ex) { ex = { id: uid(), name: CAT[key].name, cat: key, createdAt: Date.now() }; state.exercises.push(ex); }
+  delete ex.archived;
+  return ex;
 }
 document.getElementById('picker-search').addEventListener('input', e => renderPicker(e.target.value));
 
@@ -2543,6 +2857,7 @@ function setupDebriefMic() {
   document.getElementById('db-tidy').hidden = !isClaudeEnabled();
   if (!SR) { btn.hidden = true; return; }
   btn.hidden = false;
+  micStatus('');
   btn.onclick = () => {
     if (DB_CTX.rec) { DB_CTX.rec.stop(); return; }
     const ta = document.getElementById('db-text');
@@ -2550,7 +2865,13 @@ function setupDebriefMic() {
     const rec = new SR();
     rec.lang = state.settings.micLang || 'en-US';   // NOT navigator.language — his phone is Spanish, his debriefs aren't
     rec.continuous = true; rec.interimResults = true;
+    // The old handler aliased onerror to onend: every failure (mic blocked, no speech service, no
+    // signal) reset the button and left the box blank with no word about why. Now each outcome says so.
+    let heard = false, err = null;
+    const watchdog = setTimeout(() => { if (!heard && DB_CTX.rec === rec) micStatus(MIC_MSG.silent, true); }, 7000);
+    rec.onstart = () => micStatus('listening… (' + rec.lang.slice(0, 2).toUpperCase() + ')');
     rec.onresult = e => {
+      heard = true; micStatus('listening… (' + rec.lang.slice(0, 2).toUpperCase() + ')');
       let finals = '', interim = '';
       for (let i = 0; i < e.results.length; i++) {
         if (e.results[i].isFinal) finals += ' ' + e.results[i][0].transcript;
@@ -2558,11 +2879,37 @@ function setupDebriefMic() {
       }
       ta.value = (base + finals + interim).trim();   // live preview; finals settle in place
     };
-    rec.onend = () => { DB_CTX.rec = null; btn.classList.remove('rec'); btn.textContent = '● record'; };
-    rec.onerror = rec.onend;
+    rec.onerror = e => {
+      err = e.error || 'unknown';
+      losWarn('mic.error', { err, lang: rec.lang, ua: navigator.userAgent.slice(0, 120) });
+      micStatus(err in MIC_MSG ? MIC_MSG[err] : ('speech recognition failed (' + err + ') — ' + MIC_MSG.fallback), true);
+    };
+    rec.onend = () => {
+      clearTimeout(watchdog);
+      if (DB_CTX.rec === rec) DB_CTX.rec = null;
+      btn.classList.remove('rec'); btn.textContent = '● record';
+      if (!err) micStatus(heard ? '' : MIC_MSG.silent, !heard);
+    };
     DB_CTX.rec = rec; btn.classList.add('rec'); btn.textContent = '■ stop';
-    try { rec.start(); } catch (e) { rec.onend(); }
+    try { rec.start(); } catch (e) { err = 'start'; micStatus('could not start the mic (' + e.message + ') — ' + MIC_MSG.fallback, true); rec.onend(); }
   };
+}
+const MIC_MSG = {
+  fallback: 'tap the box and use the 🎙 on your keyboard instead.',
+  silent: 'the mic isn\'t hearing anything. Check the EN/ES switch, or tap the box and use the 🎙 on your keyboard.',
+  'not-allowed': 'mic permission is blocked for this site — allow it in the browser\'s site settings, or tap the box and use the 🎙 on your keyboard.',
+  'service-not-allowed': 'this browser won\'t run speech recognition here — tap the box and use the 🎙 on your keyboard.',
+  'no-speech': 'didn\'t catch any speech — try again closer to the phone, or use the 🎙 on your keyboard.',
+  'network': 'speech recognition needs signal — no connection right now. Use the 🎙 on your keyboard.',
+  'audio-capture': 'no microphone available — another app may be holding it.',
+  'aborted': '',
+  'language-not-supported': 'that language isn\'t supported here — switch EN/ES, or use the 🎙 on your keyboard.',
+};
+function micStatus(msg, warn = false) {
+  const el = document.getElementById('db-mic-status');
+  if (!el) return;
+  el.textContent = msg; el.hidden = !msg;
+  el.style.color = warn ? 'var(--hot)' : 'var(--ink-faint)';
 }
 /* one-tap transcript repair: the recognizer's raw output goes to Claude for a plausibility rewrite */
 document.getElementById('db-tidy').addEventListener('click', async () => {
@@ -2575,7 +2922,7 @@ document.getElementById('db-tidy').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = '…';
   try {
     const out = await callClaudeChat([{ role: 'user', content:
-      'This is a raw speech-to-text transcript of me talking about how a workout went / how my body feels. It contains recognition errors. Rewrite it as what I most plausibly said: first person, keep all concrete details (exercises, weights, body parts, pain), fix garbled words, no commentary. Reply with ONLY the corrected text.\n\n' + raw }], 600);
+      'This is a raw speech-to-text transcript of me talking about how a workout went / how my body feels. It contains recognition errors. Rewrite it as what I most plausibly said: first person, keep all concrete details (exercises, weights, body parts, pain), fix garbled words, no commentary. Reply with ONLY the corrected text.\n\n' + raw }], 2000);
     ta.value = out.trim();
     toast('transcript tidied — check it reads right.');
   } catch (e) { toast('tidy failed: ' + e.message, true); }
@@ -2584,7 +2931,7 @@ document.getElementById('db-tidy').addEventListener('click', async () => {
 function sessionRecap(s) {
   return s.entries.map(en => {
     const ex = exById(en.exerciseId);
-    return `${ex?.name || '?'} ${en.sets.map(x => `${fmtSet(x)}${x.rpe ? '@' + x.rpe : ''}${x.pr ? '(PR)' : ''}`).join(' ')}`;
+    return `${ex?.name || '?'} (${exLoad(ex) === 'bw' ? 'bodyweight' : exUnit(ex)}) ${en.sets.map(x => `${fmtSet(x, ex)}${x.rpe ? '@' + x.rpe : ''}${x.pr ? '(PR)' : ''}`).join(' ')}`;
   }).join(' | ');
 }
 async function sendDebrief() {
@@ -2610,7 +2957,7 @@ async function sendDebrief() {
       '',
       'Do three things: 1) extract the key data points in one compact line (energy, soreness, pain, sleep, stress, per-exercise feedback); 2) react in 2–3 sentences; 3) ONLY if this clearly warrants adjusting my current plan, propose the adjusted plan as the usual json block — otherwise no block.',
     ].join('\n');
-    const out = await callClaudeChat([{ role: 'user', content: msg }], 1100);
+    const out = await callClaudeChat([{ role: 'user', content: msg }], 4000);
     const { text: shown, plan } = extractPlan(out);
     s.debrief.reply = shown || '(noted)';
     save();
@@ -2625,7 +2972,7 @@ function appendPlanCard(replyBox, plan) {
   if (!plan) return;
   const card = document.createElement('div');
   card.className = 'plan-accept chamfer';
-  card.innerHTML = `<h4>${escapeHtml(plan.name || 'ADJUSTED PLAN')}</h4>${plan.days.map(d => `<div class="pa-day"><strong>${escapeHtml(d.name)}</strong> — ${(d.exercises || []).map(e => `${escapeHtml(e.name)} ${e.sets}×${planSec(e) ? planSec(e) + 's' : e.reps}`).join(', ')}</div>`).join('')}<div style="margin-top:10px"><button class="btn-primary chamfer" id="db-accept">ACCEPT ADJUSTED PLAN</button></div>`;
+  card.innerHTML = `<h4>${escapeHtml(plan.name || 'ADJUSTED PLAN')}</h4>${planBody(plan)}<div style="margin-top:10px"><button class="btn-primary chamfer" id="db-accept">ACCEPT ADJUSTED PLAN</button></div>`;
   replyBox.appendChild(card);
   document.getElementById('db-accept').addEventListener('click', () => { debriefModal.close(); acceptPlan(plan); });
 }
@@ -2655,7 +3002,7 @@ async function sendCheckin() {
       '',
       'Do three things: 1) extract the key signals in one compact line (pain location+severity, soreness, energy, sleep); 2) react in 2–3 sentences — if he reports pain, say concretely what to modify, deload, or avoid in the next session; 3) ONLY if this clearly warrants adjusting his current plan, propose the adjusted plan as the usual json block — otherwise no block.',
     ].join('\n');
-    const out = await callClaudeChat([{ role: 'user', content: msg }], 1100);
+    const out = await callClaudeChat([{ role: 'user', content: msg }], 4000);
     const { text: shown, plan } = extractPlan(out);
     rec.reply = shown || '(noted)';
     save();
@@ -2704,7 +3051,7 @@ viewRoot.addEventListener('click', e => {
     save({ push: false });
     const tr = viewRoot.querySelector(`.tr[data-xi="${xi}"][data-ri="${ri}"]`);
     if (tr) {
-      tr.querySelector('input[data-fld="w"]').value = fmtN(dispW(row.w));
+      const wi = tr.querySelector('input[data-fld="w"]'); if (wi) wi.value = fmtN(toU(row.w, exUnit(exById(aw.exercises[xi].exerciseId))));
       const n = tr.querySelector('input[data-fld="r"], input[data-fld="s"]');
       if (n) n.value = row.sec ?? row.r;
     }
@@ -2715,11 +3062,17 @@ viewRoot.addEventListener('click', e => {
     const row = aw.exercises[xi2]?.rows[ri2]; if (!row || row.done) return;
     const inp = viewRoot.querySelector(`input[data-fld="w"][data-xi="${xi2}"][data-ri="${ri2}"]`);
     const ex2 = exById(aw.exercises[xi2].exerciseId);
-    const cur = parseFloat(inp?.value) || dispW(row.w);
-    const next = Math.max(0, Math.round((cur + stepFor(ex2) * +el.dataset.d) * 100) / 100);
+    const u2 = exUnit(ex2);
+    const cur = parseFloat(inp?.value) || toU(row.w, u2);
+    const next = Math.max(0, Math.round((cur + exStep(ex2) * +el.dataset.d) * 100) / 100);
     if (inp) inp.value = fmtN(next);
-    row.w = canonW(next);
+    row.w = fromU(next, u2);
     save({ push: false });
+  }
+  else if (act === 'unit-flip') {
+    const g = gearOf(el.dataset.g); if (!g?.unit) return;
+    const u = g.unit === 'lb' ? 'kg' : 'lb';
+    if (confirm(`Do the numbers on the ${g.name.toLowerCase()} read in ${u.toUpperCase()}?`)) setGearUnit(g.id, u);
   }
   else if (act === 'prev-ex') setFocus((state.activeWorkout?.focus || 0) - 1);
   else if (act === 'next-ex') setFocus((state.activeWorkout?.focus || 0) + 1);
@@ -2739,6 +3092,7 @@ viewRoot.addEventListener('click', e => {
   else if (act === 'drop-plan') { if (confirm('Drop the current plan?')) { state.plan = null; save(); renderView(); toast('plan dropped.'); } }
   else if (act === 'open-session') nav('session', id);
   else if (act === 'open-exercise') nav('exercise', id);
+  else if (act === 'add-catalog') { const ex = exForCat(el.dataset.cat); save(); nav('exercise', ex.id); }
   else if (act === 'goto-home') nav('home');
   else if (act === 'goto-history') nav('history');
   else if (act === 'goto-exercises') nav('exercises');
@@ -2755,6 +3109,7 @@ viewRoot.addEventListener('focusin', e => {
 document.getElementById('picker-list').addEventListener('click', e => {
   const el = e.target.closest('[data-act]');
   if (!el) return;
+  if (el.dataset.act === 'pick-catalog') { const ex = exForCat(el.dataset.cat); save(); pickerApply(ex.id); pickerModal.close(); return; }
   if (el.dataset.act === 'ex-video') { openVideo(exById(el.dataset.id)); return; }
   if (el.dataset.act === 'pick-exercise') {
     pickerApply(el.dataset.id);   // BEFORE close(): the close event resets PICKER_CTX
@@ -2762,18 +3117,48 @@ document.getElementById('picker-list').addEventListener('click', e => {
   }
   if (el.dataset.act === 'create-exercise') {
     const name = el.dataset.name;
-    const ex = { id: uid(), name, step: 5, videoQuery: name + ' exercise form', createdAt: Date.now() };
+    const ex = { id: uid(), name, load: 'ext', gear: '', videoQuery: name + ' exercise form', createdAt: Date.now() };
     state.exercises.push(ex); save();
+    toast('created — tap ✎ to set how it\'s loaded.');
     pickerApply(ex.id);
     pickerModal.close();
   }
 });
 pickerModal.addEventListener('close', () => { PICKER_CTX = { type: 'add' }; });
-async function editExercise(exId) {
+const EXM = { id: null, load: 'ext' };
+function renderExmLoad(l) { EXM.load = l; document.querySelectorAll('#exm-load button').forEach(b => b.classList.toggle('active', b.dataset.load === l)); }
+document.querySelectorAll('#exm-load button').forEach(b => b.addEventListener('click', () => renderExmLoad(b.dataset.load)));
+document.getElementById('exm-save').addEventListener('click', () => {
+  const ex = exById(EXM.id); if (!ex) return;
+  const name = document.getElementById('exm-name').value.trim();
+  if (name && !ex.cat) ex.name = name.slice(0, 60);
+  const cat = CAT[ex.cat], gear = document.getElementById('exm-gear').value;
+  // store an override only where it differs from the catalog, so a catalog fix still reaches him
+  if (cat && EXM.load === cat.load) delete ex.load; else ex.load = EXM.load;
+  if (cat && gear === cat.gear) delete ex.gear; else ex.gear = gear;
+  const url = document.getElementById('exm-video').value.trim();
+  ex.videoUrl = url || null;
+  save(); document.getElementById('ex-modal').close(); renderView(); toast('saved.');
+});
+document.getElementById('exm-archive').addEventListener('click', () => {
+  const ex = exById(EXM.id); if (!ex) return;
+  if (!confirm(`Archive ${ex.name}? Its history stays; it just leaves the lists.`)) return;
+  ex.archived = true; save(); document.getElementById('ex-modal').close(); nav('exercises');
+});
+/* exercise sheet: how it's loaded, what it's done on, its demo. A catalog exercise keeps its common
+   name; load/gear set here override the catalog for this one exercise. */
+function editExercise(exId) {
   const ex = exById(exId); if (!ex) return;
-  const url = await askPrompt('Demo video', 'Paste a YouTube URL for ' + ex.name + ' (empty clears it)', ex.videoUrl || '');
-  ex.videoUrl = url || null; save(); toast(url ? 'video linked.' : 'video cleared.');
-  renderView();   // refresh media panel / thumbs
+  EXM.id = exId;
+  const cat = CAT[ex.cat];
+  document.getElementById('exm-name').value = ex.name;
+  document.getElementById('exm-name').readOnly = !!cat;
+  document.getElementById('exm-cat').textContent = cat ? (cat.exdb ? 'catalog exercise · demo checked' : 'catalog exercise · no trustworthy demo — video search instead') : 'custom exercise · no demo';
+  document.getElementById('exm-gear').innerHTML = '<option value="">none / bodyweight</option>' + gearList().filter(g => g.have || g.id === exGearId(ex)).map(g => `<option value="${g.id}">${escapeHtml(g.name)}${g.have ? '' : ' (not in this gym)'}</option>`).join('');
+  document.getElementById('exm-gear').value = exGearId(ex);
+  document.getElementById('exm-video').value = ex.videoUrl || '';
+  renderExmLoad(exLoad(ex));
+  document.getElementById('ex-modal').showModal();
 }
 
 /* ═══ settings wiring (shell + units + rest + program note) ═══ */
@@ -2796,7 +3181,7 @@ function openSettings() {
   document.getElementById('sync-pat').value = state.settings.sync.githubPat || '';
   document.getElementById('sync-gist-id').value = state.settings.sync.gistId || '';
   document.getElementById('rest-default').value = state.settings.restDefault || 90;
-  renderUnitsSeg(); renderSchedSeg(); renderClaudeStatus(); renderSyncStatus();
+  renderUnitsSeg(); renderSchedSeg(); renderClaudeStatus(); renderSyncStatus(); renderGearList();
   settingsModal.showModal();
 }
 function renderSchedSeg() {
@@ -2826,10 +3211,46 @@ document.getElementById('rest-default').addEventListener('change', e => {
 });
 document.getElementById('claude-rules').addEventListener('input', e => { state.settings.claudeRules = e.target.value; save(); });
 document.getElementById('program-note').addEventListener('input', e => { state.settings.claude.programNote = e.target.value; save(); });
-document.getElementById('equipment').addEventListener('input', e => {
-  state.settings.claude.equipment = e.target.value; save();
-  try { localStorage.removeItem('cuaderno.exdb.v2'); } catch (err) {}   // demo matching is equipment-aware — recompute
+document.getElementById('equipment').addEventListener('input', e => { state.settings.claude.equipment = e.target.value; save(); });
+function renderGearList() {
+  document.getElementById('gear-list').innerHTML = gearList().map(g => `<div class="gear-row${g.have ? '' : ' off'}">
+    <input type="checkbox" data-gear-have="${g.id}" ${g.have ? 'checked' : ''} aria-label="have ${escapeHtml(g.name)}">
+    <span class="gn">${escapeHtml(g.name)}${g.note ? `<small>${escapeHtml(g.note)}</small>` : ''}</span>
+    ${g.unit ? `<span class="gc"><span class="seg"><button data-gear-unit="${g.id}" data-u="lb" class="${g.unit === 'lb' ? 'active' : ''}">lb</button><button data-gear-unit="${g.id}" data-u="kg" class="${g.unit === 'kg' ? 'active' : ''}">kg</button></span>
+    <label style="font-size:10px;color:var(--ink-faint)">step <input type="number" min="0.5" step="0.5" data-gear-step="${g.id}" value="${g.step}"></label></span>` : ''}
+  </div>`).join('');
+}
+document.getElementById('gear-list').addEventListener('click', e => {
+  const b = e.target.closest('[data-gear-unit]'); if (b) setGearUnit(b.dataset.gearUnit, b.dataset.u);
 });
+document.getElementById('gear-list').addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.gearHave) { state.gear[t.dataset.gearHave] = { ...(state.gear[t.dataset.gearHave] || {}), have: t.checked }; save(); renderGearList(); }
+  if (t.dataset.gearStep) { const v = parseFloat(t.value); if (v > 0) { state.gear[t.dataset.gearStep] = { ...(state.gear[t.dataset.gearStep] || {}), step: v }; save(); } }
+});
+/* The gear's numbers were read in the wrong unit. The pin said "50"; the question is whether that was
+   50 lb or 50 kg — so the number he sees stays put and what it MEANS changes. Past sets are only
+   relabeled if he says so, and only since the move to this gym (GYM_SINCE): an old gym's history
+   isn't this machine's. */
+function setGearUnit(id, u) {
+  const g = gearOf(id); if (!g?.unit || g.unit === u) return;
+  const old = g.unit;
+  const exIds = new Set(state.exercises.filter(e => exGearId(e) === id).map(e => e.id));
+  const past = [];
+  for (const s of state.sessions) for (const en of s.entries) if (exIds.has(en.exerciseId))
+    for (const st of en.sets) if ((st.ts || 0) >= GYM_SINCE && (st.u || 'lb') === old && st.w > 0) past.push(st);
+  const fix = past.length > 0 && confirm(`${g.name}: ${old} → ${u}.\n\nYou logged ${past.length} set${past.length > 1 ? 's' : ''} on it since Aug 15. Were those numbers ${u} too?\n\nOK = relabel them as ${u} · Cancel = leave that history as it is`);
+  const relabel = w => fromU(toU(w, old), u);
+  const defStep = GEAR_DEFAULTS[id].step;
+  state.gear[id] = { ...(state.gear[id] || {}), unit: u, step: u === 'lb' ? defStep : Math.max(0.5, Math.round(defStep * LB * 2) / 2) };
+  if (fix) for (const st of past) { st.w = Math.round(relabel(st.w) * 100) / 100; st.u = u; }
+  for (const wx of state.activeWorkout?.exercises || []) if (exIds.has(wx.exerciseId))
+    for (const r of wx.rows) if (!r.done || fix) r.w = relabel(r.w);   // the number on screen stays the number on the pin
+  for (const d of state.plan?.days || []) for (const t of d.exercises) if (exIds.has(t.exerciseId) && t.w) t.w = relabel(t.w);
+  recomputePRs(state);
+  save(); renderGearList(); renderView();
+  toast(`${g.name} now reads in ${u}${fix ? ` — ${past.length} past sets relabeled` : ''}.`);
+}
 document.getElementById('claude-model').addEventListener('change', e => { state.settings.claude.model = e.target.value; save(); });
 // Device-local on purpose: the helper only exists on the Mac, so this must NOT ride the gist sync
 // (it doesn't — the sync payload lists its claude fields explicitly).
@@ -2918,7 +3339,11 @@ async function syncPull(force = false) {
       // last-write-wins like the rest of the state — preserving the whole object made a stale
       // device silently clobber equipment/notes set elsewhere
       state.settings.claude = { ...state.settings.claude, apiKey: preservedClaude.apiKey, enabled: preservedClaude.enabled, mode: preservedClaude.mode };
-      if (preservedWorkout && sessionById(preservedWorkout.sessionId)) state.activeWorkout = preservedWorkout;
+      if (preservedWorkout && sessionById(preservedWorkout.sessionId)) {
+        // the pull may have merged exercises the live workout still points at
+        for (const wx of preservedWorkout.exercises) { let n = 0; while (state.exMerged[wx.exerciseId] && n++ < 10) wx.exerciseId = state.exMerged[wx.exerciseId]; }
+        state.activeWorkout = preservedWorkout;
+      }
       state.settings.sync.lastSyncedAt = Date.now();
       suppressSync = true; save({ markModified: false, push: false }); suppressSync = false;
       renderAll();
@@ -3021,7 +3446,7 @@ document.getElementById('import-file').addEventListener('change', async e => {
 });
 
 /* ═══ modal helpers (shell) ═══ */
-const ALL_DIALOGS = { picker: pickerModal, cardio: cardioModal, video: videoModal, settings: settingsModal, prompt: promptModal, debrief: debriefModal };
+const ALL_DIALOGS = { picker: pickerModal, cardio: cardioModal, video: videoModal, settings: settingsModal, prompt: promptModal, debrief: debriefModal, ex: document.getElementById('ex-modal') };
 Object.values(ALL_DIALOGS).forEach(d => {
   d.addEventListener('click', e => {
     if (e.target === d) {
@@ -3075,6 +3500,7 @@ window.addEventListener('offline', () => setSyncPipState(null));
 
 applyTheme(state.settings.theme);
 (function boot() {
+  if (schemaMigrate.upgraded) save();   // persist (and sync up) the migrated state once, so every device converges on it
   const aw = state.activeWorkout;
   if (aw && sessionById(aw.sessionId) && !sessionById(aw.sessionId).endedAt) { nav('workout'); return; }
   if (aw) { state.activeWorkout = null; save({ push: false }); }
