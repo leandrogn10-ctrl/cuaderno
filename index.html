@@ -3562,7 +3562,11 @@ window.addEventListener('offline', () => setSyncPipState(null));
 
 applyTheme(state.settings.theme);
 (function boot() {
-  if (schemaMigrate.upgraded) save();   // persist (and sync up) the migrated state once, so every device converges on it
+  // Persist the migrated copy LOCALLY, keeping its own timestamp, and push nothing. The first version
+  // called save() here: markModified stamped a STALE device's old copy as the newest state, and the
+  // next push wiped two sessions off the gist (2026-09-25 05:53Z). A migration changes the shape of
+  // what a device holds, never how recent it is — the gist's own copy migrates wherever it is read.
+  if (schemaMigrate.upgraded) save({ markModified: false, push: false });
   const aw = state.activeWorkout;
   if (aw && sessionById(aw.sessionId) && !sessionById(aw.sessionId).endedAt) { nav('workout'); return; }
   if (aw) { state.activeWorkout = null; save({ push: false }); }

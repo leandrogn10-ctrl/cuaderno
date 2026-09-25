@@ -346,6 +346,9 @@ async function loadApp() {
     log('migrate: "(empty response)" is not kept as a reply', m.sessions[0].debrief.reply === null);
     log('migrate: old-gym equipment text is parked, not fed to Coach', m.settings.claude.equipment === '' && /pulley/.test(m.settings.claude.equipmentOld));
     log('migrate: pre-migration snapshot kept on the device', !!W().localStorage.getItem('cuaderno.v1.pre-schema2'));
+    // The migration must not make a stale copy look NEW: a bumped lastModified wins the next sync and
+    // overwrites the gist with old data (it did, 2026-09-25). The legacy fixture was saved at 1.
+    log('migrate: the migrated copy keeps its own timestamp (a stale device never outranks the gist)', m.lastModified === 1, 'lastModified=' + m.lastModified);
     const again = W().schemaMigrate(JSON.parse(JSON.stringify(m)));
     log('migrate: idempotent (a second run changes nothing)', JSON.stringify(again) === JSON.stringify(m));
     // an OLD build still on another device pushes a u-less 45-lb push-up: the next load must clean it
