@@ -280,6 +280,12 @@ async function loadApp() {
     log('gear: barbell + unknown gear flagged, dumbbell move not', w1.length === 2 && w1.some(x => /Barbell Squat/.test(x)) && w1.some(x => /yoke/.test(x)), JSON.stringify(w1));
     W().eval('state').gear.barbell = { have: true };                        // CONTROL: owning a barbell must clear that warning
     log('gear CONTROL: switching the barbell on clears its warning', W().planWarnings(warnP).length === 1);
+    // a target must exist on the rack: Coach wrote 22 lb for a 5-lb-step dumbbell (2026-09-25)
+    const keepPlan = state().plan;
+    W().acceptPlan({ type: 'plan', name: 'SNAP', days: [{ name: 'S', exercises: [{ name: 'Hammer Curl', sets: 2, reps: 12, startWeight: 22 }, { name: 'Russian Twist', sets: 2, reps: 20, startWeight: 8 }] }] });
+    const sp = state().plan.days[0].exercises;
+    log('snap: 22 lb on 5-lb dumbbells becomes 20; a gearless bw+ plate (8) is left as written', sp[0].w === 20 && sp[1].w === 8, JSON.stringify(sp.map(t => t.w)));
+    W().eval('state').plan = keepPlan; W().save();
     delete W().eval('state').gear.barbell;
 
     // ── demos: exact catalog lookup only; a custom exercise never borrows a lookalike picture ──
@@ -321,7 +327,7 @@ async function loadApp() {
     const legacy = {
       settings: { units: 'lbs', claude: { equipment: 'Dumbbells, pulley machine; no barbell' } },
       exercises: [{ id: 'a', name: 'Push-Up' }, { id: 'b', name: 'DB Row' }, { id: 'c', name: 'Dumbbell Row' },
-                  { id: 'd', name: 'Weird Custom' }, { id: 'e', name: 'Weighted Pull-Up' }],
+                  { id: 'd', name: 'Weird Custom' }, { id: 'e', name: 'Weighted Pull-Up' }, { id: 'f', name: 'Hammer Curl' }],
       sessions: [{ id: 's1', date: '2026-09-10', endedAt: 9, entries: [
         { exerciseId: 'a', sets: [{ w: 45, r: 10, ts: 1 }, { w: 45, r: 12, ts: 2 }] },
         { exerciseId: 'b', sets: [{ w: 15, r: 10, ts: 3 }] },
@@ -331,7 +337,8 @@ async function loadApp() {
       ], debrief: { text: 'ok', reply: '(empty response)' } }],
       bodyweight: [], cardio: [], activeWorkout: null, lastModified: 1,
       plan: { name: 'P', cursor: 0, days: [{ id: 'd1', name: 'D', exercises: [
-        { exerciseId: 'b', name: 'DB Row', sets: 3, reps: 10, w: 15 }, { exerciseId: 'a', name: 'Push-Up', sets: 3, reps: 10, w: 45 }] }] },
+        { exerciseId: 'b', name: 'DB Row', sets: 3, reps: 10, w: 15 }, { exerciseId: 'a', name: 'Push-Up', sets: 3, reps: 10, w: 45 },
+        { exerciseId: 'f', name: 'Hammer Curl', sets: 2, reps: 12, w: 22 }] }] },
     };
     W().localStorage.setItem('cuaderno.v1', JSON.stringify(legacy));
     await loadApp();
@@ -343,6 +350,7 @@ async function loadApp() {
         ents.find(x => x.exerciseId === eid('Pull-Up'))?.sets.map(s => s.w).join() === '45,25' && ents.find(x => x.exerciseId === eid('Weird Custom'))?.sets[0].w === 45);
     log('migrate: every set stamped u', ents.every(x => x.sets.every(s => s.u === 'lb')));
     log('migrate: plan points at the survivor, bw target has no weight', m.plan.days[0].exercises[0].exerciseId === eid('Dumbbell Row') && m.plan.days[0].exercises[1].w === null);
+    log('migrate: a saved plan\'s off-rack target (22 lb) snaps to 20; an on-rack one (15) is untouched', m.plan.days[0].exercises[2].w === 20 && m.plan.days[0].exercises[0].w === 15, JSON.stringify(m.plan.days[0].exercises.map(t => t.w)));
     log('migrate: "(empty response)" is not kept as a reply', m.sessions[0].debrief.reply === null);
     log('migrate: old-gym equipment text is parked, not fed to Coach', m.settings.claude.equipment === '' && /pulley/.test(m.settings.claude.equipmentOld));
     log('migrate: pre-migration snapshot kept on the device', !!W().localStorage.getItem('cuaderno.v1.pre-schema2'));
@@ -357,6 +365,13 @@ async function loadApp() {
     const cleaned = W().schemaMigrate(pushedByOld);
     const lastPu = cleaned.sessions[0].entries.find(x => x.exerciseId === eid('Push-Up')).sets.slice(-1)[0];
     log('migrate: an old build\'s u-less 45 push-up is cleaned on the next pull', lastPu.w === 0 && lastPu.u === 'lb', JSON.stringify(lastPu));
+
+    // ── a saved log that throws in migrate must not become an empty log that outranks the gist ──
+    W().localStorage.setItem('cuaderno.v1', JSON.stringify({ settings: {}, exercises: [], sessions: 5, lastModified: 7 }));
+    await loadApp();
+    const broken = W().eval('state'), qk = Object.keys(W().localStorage).find(k => k.startsWith('cuaderno.v1.unreadable.'));
+    log('load: an unreadable log is quarantined, not discarded', !!qk && /"sessions":5/.test(W().localStorage.getItem(qk) || ''), qk);
+    log('load: the fallback is stamped oldest (0) so the next pull adopts the gist', broken.lastModified === 0, 'lastModified=' + broken.lastModified);
 
     log('ALL DONE', true);
   } catch (e) {

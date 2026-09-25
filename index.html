@@ -1070,6 +1070,12 @@ function schemaMigrate(s) {
     if (ex) t.name = ex.name;
     if (loadOf(t.exerciseId) === 'bw') t.w = null;
   }
+  // 2b) plan targets land on real increments (idempotent: a snapped value snaps to itself)
+  for (const d of s.plan?.days || []) for (const t of d.exercises) {
+    const ex = s.exercises.find(e => e.id === t.exerciseId);
+    const gid = ex?.gear ?? CAT[ex?.cat]?.gear;
+    if (t.w && gid && GEAR_DEFAULTS[gid]) t.w = snapToGear(t.w, { ...GEAR_DEFAULTS[gid], ...(s.gear[gid] || {}) });
+  }
   // 3) PR flags are derived — recompute after merges/zeroing so no phantom PR survives
   recomputePRs(s);
   // 4) a reply that was never a reply
@@ -1083,6 +1089,18 @@ function schemaMigrate(s) {
   }
   s.schema = SCHEMA;
   return s;
+}
+/* A target weight has to exist on the equipment. Coach is TOLD the rack goes in steps of 5 and
+   still wrote 22 lb (2026-09-25), so the rule lives here: snap to the nearest step in the gear's own
+   unit. Only gear that HAS a step — a bodyweight move with an optional plate is left as written.
+   Self-contained ON PURPOSE: schemaMigrate calls it from inside `let state = load()`, where the
+   toU/fromU consts below are still in their TDZ — calling them threw, load() swallowed it and booted
+   an EMPTY log (caught by the harness before it shipped). Only LB, declared above load(), is safe. */
+function snapToGear(wLb, gear) {
+  if (!(wLb > 0) || !gear?.unit || !(gear.step > 0)) return wLb;
+  const kg = gear.unit === 'kg';
+  const v = kg ? wLb * LB : wLb, n = Math.max(gear.step, Math.round(v / gear.step) * gear.step);
+  return Math.round((kg ? n / LB : n) * 100) / 100;
 }
 function recomputePRs(s) {
   const all = [];
@@ -1154,11 +1172,23 @@ function migrate(s) {
   s.lastModified = s.lastModified || Date.now();
   return appMigrate(s);
 }
+/* A saved log that won't parse or migrate must never become an EMPTY log that looks NEW: that is the
+   one state that wins the next sync and overwrites the gist with nothing. So the unreadable copy is
+   quarantined under its own key (never overwritten), and the fallback is stamped lastModified = 0 —
+   the oldest possible — so the first pull ADOPTS the gist instead of losing to it. */
 function load() {
+  let raw = null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return migrate(JSON.parse(raw));
-  } catch (e) { console.warn('load failed', e); }
+  } catch (e) {
+    console.warn('load failed', e);
+    try { localStorage.setItem(STORAGE_KEY + '.unreadable.' + Date.now(), raw); } catch (e2) {}
+    try { losErr('load.failed', { msg: String(e && e.message || e).slice(0, 160) }); } catch (e3) {}
+    const fresh = migrate({ ...appDefaultState() });
+    fresh.lastModified = 0;
+    return fresh;
+  }
   return migrate({ ...appDefaultState() });
 }
 let state = load();
@@ -2621,7 +2651,7 @@ function acceptPlan(p) {
       delete ex.archived;
       if (t.videoQuery && !ex.videoUrl) ex.videoQuery = t.videoQuery;
       const sec = planSec(t);
-      const w = t.startWeight && exLoad(ex) !== 'bw' ? Math.round(fromU(+t.startWeight, exUnit(ex)) * 100) / 100 : null;
+      const w = t.startWeight && exLoad(ex) !== 'bw' ? snapToGear(Math.round(fromU(+t.startWeight, exUnit(ex)) * 100) / 100, gearOf(exGearId(ex))) : null;
       return { exerciseId: ex.id, name: ex.name, sets: +t.sets || 3,
                reps: sec ? null : (+t.reps || 8), sec: sec || null, w,
                videoQuery: t.videoQuery || null };
