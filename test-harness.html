@@ -373,6 +373,24 @@ async function loadApp() {
     log('load: an unreadable log is quarantined, not discarded', !!qk && /"sessions":5/.test(W().localStorage.getItem(qk) || ''), qk);
     log('load: the fallback is stamped oldest (0) so the next pull adopts the gist', broken.lastModified === 0, 'lastModified=' + broken.lastModified);
 
+    // ── a day is LOCAL (28-sep-2026): toISOString filed every session started after 20:00 EDT under
+    //    TOMORROW, so LeandroOS marked the gym a day late. SA = the real session that exposed it. ──
+    const SA = 1790645037991;   // 2026-09-28 21:23:57 EDT = 2026-09-29 01:23:57 UTC
+    log('day: harness runs in America/New_York (in UTC the checks below prove nothing)', new Date(SA).getTimezoneOffset() === 240, 'offset=' + new Date(SA).getTimezoneOffset());
+    log('day CONTROL: the fixture is a case where UTC and local disagree', new Date(SA).toISOString().slice(0, 10) === '2026-09-29');
+    const ev = W().migrate({ schema: 2, settings: {}, exercises: [], lastModified: 5,
+      sessions: [{ id: 'e1', date: '2026-09-29', startedAt: SA, entries: [] }, { id: 'e2', date: '2026-06-11', entries: [] }],
+      checkins: [{ id: 'c1', ts: SA, date: '2026-09-29', text: 'x' }] });
+    log('day: an evening session is re-dated to the day it started', ev.sessions[0].date === '2026-09-28', ev.sessions[0].date);
+    log('day: a session with no startedAt keeps its date', ev.sessions[1].date === '2026-06-11');
+    log('day: a check-in is re-dated from its ts', ev.checkins[0].date === '2026-09-28', ev.checkins[0].date);
+    log('day: re-dating never bumps lastModified (a stale device must not outrank the gist)', ev.lastModified === 5, 'lastModified=' + ev.lastModified);
+    log('day: localDay is the local date, not UTC', W().localDay(SA) === '2026-09-28');
+    const nowD = new Date(), pad = n => String(n).padStart(2, '0');
+    log('day: today() is the local date', W().eval('today()') === nowD.getFullYear() + '-' + pad(nowD.getMonth() + 1) + '-' + pad(nowD.getDate()), W().eval('today()'));
+    // ── his crunch machine (photo 13) is not exdb's Nautilus: no picture beats the wrong one ──
+    log('catalog: Ab Crunch Machine has no exdb demo', W().eval('CAT')['machine-crunch']?.exdb === null, JSON.stringify(W().eval('CAT')['machine-crunch']));
+
     log('ALL DONE', true);
   } catch (e) {
     log('EXCEPTION', false, e.message + ' @ ' + (e.stack || '').split('\n')[1]);

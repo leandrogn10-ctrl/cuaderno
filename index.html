@@ -947,7 +947,7 @@ const CATALOG = [
   ['hanging-leg-raise', 'Hanging Leg Raise', 'bw', 'pullupbar', 'Hanging Leg Raise', []],
   ['captains-chair', "Captain's Chair Knee Raise", 'bw', 'dipstation', 'Knee/Hip Raise On Parallel Bars', ['knee raise', 'vertical knee raise', 'captains chair']],
   ['cable-crunch', 'Cable Crunch', 'ext', 'cable', 'Cable Crunch', ['kneeling cable crunch']],
-  ['machine-crunch', 'Ab Crunch Machine', 'ext', 'abcrunch', 'Ab Crunch Machine', ['machine crunch']],
+  ['machine-crunch', 'Ab Crunch Machine', 'ext', 'abcrunch', null, ['machine crunch']],   // exdb's is a Nautilus with elbow pads and arms overhead; his (photo 13) is an Atlantis chest-pad crunch, pushed down with both hands. No match → video search
   ['russian-twist', 'Russian Twist', 'bw+', '', 'Russian Twist', []],
   ['mountain-climber', 'Mountain Climber', 'bw', '', 'Mountain Climbers', ['mountain climbers']],
   ['dead-bug', 'Dead Bug', 'bw', '', 'Dead Bug', []],
@@ -1012,6 +1012,10 @@ function appMigrate(s) {
   s.gear = s.gear || {};
   for (const [id, g] of Object.entries(s.gear)) if (!GEAR_DEFAULTS[id] || typeof g !== 'object') delete s.gear[id];
   s.exMerged = s.exMerged || {};
+  // a session's day is when it STARTED, locally; re-derived on every load so a UTC date an old build
+  // pushed is corrected on arrival (idempotent, and never bumps lastModified)
+  for (const x of s.sessions) if (x.startedAt > 0) x.date = localDay(x.startedAt);
+  for (const c of s.checkins) if (c.ts > 0) c.date = localDay(c.ts);
   return schemaMigrate(s);
 }
 /* Schema 2. Runs on EVERY load and every gist pull, so each step is idempotent: a phone still on
@@ -1201,7 +1205,11 @@ function save({ markModified = true, push = true } = {}) {
 
 /* ── helpers (shell) ── */
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-const today = () => new Date().toISOString().slice(0, 10);
+/* A day is the LOCAL date. toISOString is UTC: until 28-sep-2026 every session started after 20:00 EDT was
+   filed under tomorrow, so LeandroOS marked the gym a day late. A declaration, not a const: appMigrate
+   calls it inside `let state = load()`, above this line. */
+function localDay(ms) { const d = new Date(ms); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+const today = () => localDay(Date.now());
 function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 let toastTimer = null;
 function toast(msg, isError = false, pr = false) {
