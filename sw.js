@@ -1,9 +1,14 @@
 // El Cuaderno service worker — offline-first shell + runtime caches for fonts and exercise media.
 // Bump CACHE_NAME to force-refresh clients; FONT/MEDIA caches survive bumps (immutable assets).
-const CACHE_NAME = 'cuaderno-v17';
+const CACHE_NAME = 'cuaderno-v18';
 const FONT_CACHE = 'cuaderno-fonts-v1';
 const MEDIA_CACHE = 'cuaderno-media-v1';
 const KEEP_CACHES = [CACHE_NAME, FONT_CACHE, MEDIA_CACHE];
+// Every sibling PWA is served from the SAME origin (leandrogn10-ctrl.github.io) and shares one CacheStorage:
+// activate deletes only THIS app's old caches — prefix = CACHE_NAME minus its version. The old `k !== CACHE_NAME` filter
+// wiped the siblings' caches (La Olla's, La Forja's media) on every deploy.
+// FONT/MEDIA share the prefix, so KEEP_CACHES still guards them.
+const CACHE_PREFIX = CACHE_NAME.replace(/v?\d+$/, '');
 const APP_SHELL = ['./', './index.html'];
 const MEDIA_MAX = 300;   // ~2 frames × 150 exercises
 
@@ -21,7 +26,7 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => !KEEP_CACHES.includes(k)).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k.startsWith(CACHE_PREFIX) && !KEEP_CACHES.includes(k)).map(k => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
