@@ -2612,15 +2612,21 @@ function planBody(p) {
 }
 function extractPlan(text) {
   const m = text.match(/```json\s*([\s\S]*?)```/);
-  if (!m) return { text, plan: null };
-  try {
-    const obj = JSON.parse(m[1]);
-    if (obj?.type === 'plan' && Array.isArray(obj.days) && obj.days.length) {
-      return { text: text.replace(m[0], '').trim(), plan: obj };
-    }
-  } catch (e) { console.warn('plan parse failed', e); }
-  return { text, plan: null };
+  if (m) {
+    try {
+      const obj = JSON.parse(m[1]);
+      if (obj?.type === 'plan' && Array.isArray(obj.days) && obj.days.length) {
+        return { text: text.replace(m[0], '').trim(), plan: obj };
+      }
+    } catch (e) { console.warn('plan parse failed', e); }
+  }
+  // A block that opened and never parsed (27-oct: a reply cut mid-JSON) used to be shown whole —
+  // a wall of raw JSON and no Accept button. Drop it and say so instead.
+  const open = text.indexOf('```json');
+  if (open < 0) return { text, plan: null };
+  return { text: (text.slice(0, open).trim() + '\n\n' + PLAN_UNREADABLE).trim(), plan: null, broken: true };
 }
+const PLAN_UNREADABLE = '⚠ coach proposed a plan but it came back unreadable — send again to get one you can accept.';
 function planSec(t) {   // timed target: explicit "seconds", or a reps string like "45s" / "45 sec"
   if (+t.seconds > 0) return Math.min(3600, Math.round(+t.seconds));
   const m = String(t.reps || '').match(/^(\d+)\s*s(ec)?/i);
@@ -2769,7 +2775,8 @@ async function callClaudeSub(messages, maxTokens) {
       else if (ev.done) return text;
     }
   }
-  return text;
+  // the helper always closes a finished answer with {done}; a stream that just stops is a cut reply
+  throw new Error('helper stream ended before the reply finished');
 }
 // Which billing path a call may take, given the setting and where we're running.
 function claudeMode() { return state.settings.claude.mode || 'auto'; }
@@ -2786,7 +2793,7 @@ let CLAUDE_VIA = null;
 // and the coach answered "add your API key in settings first" with a live helper sitting right there.
 // To turn the coach off on the Mac now: Billing → "API key only" (with no key saved).
 function isClaudeEnabled() { return canUseApi() || canUseSub(); }
-async function callClaudeChat(messages, maxTokens = 4000) {   // thinking tokens count against maxTokens
+async function callClaudeChat(messages, maxTokens = 16000) {   // thinking tokens count against maxTokens — 4000 cut plans mid-JSON
   if (canUseSub()) {
     try {
       const t = await callClaudeSub(messages, maxTokens);
@@ -2822,6 +2829,7 @@ async function callClaudeChat(messages, maxTokens = 4000) {   // thinking tokens
 function claudeReplyText(data) {
   const text = (data?.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
   if (!text) throw new Error('coach sent no text (stop_reason: ' + (data?.stop_reason || 'unknown') + ')');
+  if (data?.stop_reason === 'max_tokens') throw new Error('coach was cut off before finishing (stop_reason: max_tokens)');
   return text;
 }
 
@@ -2919,7 +2927,9 @@ function openDebrief(sessionId) {
   document.getElementById('db-foot').textContent = 'saved to this session — coach reads these';
   document.getElementById('db-text').placeholder = 'talk or type — energy, soreness, pain, sleep, what felt heavy, life stuff…';
   document.getElementById('db-text').value = s.debrief?.text || '';
-  document.getElementById('db-reply').innerHTML = s.debrief?.reply ? `<div class="msg ai">${escapeHtml(s.debrief.reply)}</div>` : '';
+  const box = document.getElementById('db-reply');
+  box.innerHTML = s.debrief?.reply ? `<div class="msg ai">${escapeHtml(extractPlan(s.debrief.reply).text)}</div>` : '';
+  appendPlanCard(box, s.debrief?.plan, s.debrief);
   setupDebriefMic();
   debriefModal.showModal();
 }
@@ -3006,7 +3016,7 @@ document.getElementById('db-tidy').addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = '…';
   try {
     const out = await callClaudeChat([{ role: 'user', content:
-      'This is a raw speech-to-text transcript of me talking about how a workout went / how my body feels. It contains recognition errors. Rewrite it as what I most plausibly said: first person, keep all concrete details (exercises, weights, body parts, pain), fix garbled words, no commentary. Reply with ONLY the corrected text.\n\n' + raw }], 2000);
+      'This is a raw speech-to-text transcript of me talking about how a workout went / how my body feels. It contains recognition errors. Rewrite it as what I most plausibly said: first person, keep all concrete details (exercises, weights, body parts, pain), fix garbled words, no commentary. Reply with ONLY the corrected text.\n\n' + raw }], 8000);
     ta.value = out.trim();
     toast('transcript tidied — check it reads right.');
   } catch (e) { toast('tidy failed: ' + e.message, true); }
@@ -3023,7 +3033,7 @@ async function sendDebrief() {
   const text = document.getElementById('db-text').value.trim();
   if (!text) { toast('say something first.', true); return; }
   if (DB_CTX.rec) DB_CTX.rec.stop();
-  s.debrief = { ts: Date.now(), text, reply: s.debrief?.reply || null };
+  s.debrief = { ts: Date.now(), text, reply: s.debrief?.reply || null, plan: s.debrief?.plan || null };
   save();   // the data point is saved no matter what — coach analysis is the bonus layer
   const replyBox = document.getElementById('db-reply');
   if (!isClaudeEnabled()) {
@@ -3041,24 +3051,34 @@ async function sendDebrief() {
       '',
       'Do three things: 1) extract the key data points in one compact line (energy, soreness, pain, sleep, stress, per-exercise feedback); 2) react in 2–3 sentences; 3) ONLY if this clearly warrants adjusting my current plan, propose the adjusted plan as the usual json block — otherwise no block.',
     ].join('\n');
-    const out = await callClaudeChat([{ role: 'user', content: msg }], 4000);
+    const out = await callClaudeChat([{ role: 'user', content: msg }]);
     const { text: shown, plan } = extractPlan(out);
     s.debrief.reply = shown || '(noted)';
+    s.debrief.plan = plan; delete s.debrief.planAcceptedAt;   // a new answer replaces the old proposal
     save();
     replyBox.innerHTML = `<div class="msg ai">${escapeHtml(s.debrief.reply)}</div>`;
-    appendPlanCard(replyBox, plan);
+    appendPlanCard(replyBox, plan, s.debrief);
     renderView();
   } catch (e) {
     replyBox.innerHTML = `<div class="msg ai">couldn't reach coach (${escapeHtml(e.message)}) — debrief saved anyway.</div>`;
   }
 }
-function appendPlanCard(replyBox, plan) {
+/* the proposal lives on its record (debrief / check-in), so closing the modal no longer throws it away;
+   once accepted it stays visible but can't be re-accepted — that would reset the day cursor to 1 */
+function appendPlanCard(replyBox, plan, rec) {
   if (!plan) return;
   const card = document.createElement('div');
   card.className = 'plan-accept chamfer';
-  card.innerHTML = `<h4>${escapeHtml(plan.name || 'Adjusted plan')}</h4>${planBody(plan)}<div style="margin-top:10px"><button class="btn-primary chamfer" id="db-accept">Accept adjusted plan</button></div>`;
+  const done = !!rec?.planAcceptedAt;
+  card.innerHTML = `<h4>${escapeHtml(plan.name || 'Adjusted plan')}</h4>${planBody(plan)}<div style="margin-top:10px">${done
+    ? `<button class="btn-secondary" id="db-accept" disabled>Accepted ${escapeHtml(fmtDay(localDay(rec.planAcceptedAt)))}</button>`
+    : `<button class="btn-primary chamfer" id="db-accept">Accept adjusted plan</button>`}</div>`;
   replyBox.appendChild(card);
-  document.getElementById('db-accept').addEventListener('click', () => { debriefModal.close(); acceptPlan(plan); });
+  if (done) return;
+  document.getElementById('db-accept').addEventListener('click', () => {
+    if (rec) { rec.planAcceptedAt = Date.now(); save(); }
+    debriefModal.close(); acceptPlan(plan);
+  });
 }
 /* any-time check-in: soreness/pain/energy, possibly days after the workout — coach can adjust the plan */
 async function sendCheckin() {
@@ -3086,12 +3106,13 @@ async function sendCheckin() {
       '',
       'Do three things: 1) extract the key signals in one compact line (pain location+severity, soreness, energy, sleep); 2) react in 2–3 sentences — if he reports pain, say concretely what to modify, deload, or avoid in the next session; 3) ONLY if this clearly warrants adjusting his current plan, propose the adjusted plan as the usual json block — otherwise no block.',
     ].join('\n');
-    const out = await callClaudeChat([{ role: 'user', content: msg }], 4000);
+    const out = await callClaudeChat([{ role: 'user', content: msg }]);
     const { text: shown, plan } = extractPlan(out);
     rec.reply = shown || '(noted)';
+    rec.plan = plan;
     save();
     replyBox.innerHTML = `<div class="msg ai">${escapeHtml(rec.reply)}</div>`;
-    appendPlanCard(replyBox, plan);
+    appendPlanCard(replyBox, plan, rec);
     renderView();
   } catch (e) {
     replyBox.innerHTML = `<div class="msg ai">couldn't reach coach (${escapeHtml(e.message)}) — check-in saved anyway.</div>`;

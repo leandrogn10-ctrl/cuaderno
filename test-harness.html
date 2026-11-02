@@ -304,6 +304,62 @@ async function loadApp() {
     const oldRead = thinkingFirst.content?.[0]?.text || '(empty response)';   // RED CONTROL: the shipped read, same payload
     log('reply CONTROL: old content[0] read reproduces "(empty response)"', oldRead === '(empty response)');
 
+    // ── a cut reply is a FAILURE, never a reply (27-oct: Sonnet 5's thinking spent a 4000 max_tokens,
+    //    the plan's JSON stopped mid-object, and the debrief showed a wall of raw JSON with no Accept) ──
+    const CUT = 'Locking Pec Deck into Day D.\n\n```json\n{"type":"plan","name":"Abs & Arms","days":[\n{"name":"DAY A","exercises":[\n{"name":"Push-Up","gear":"","load":"bw","sets';
+    const ep = W().extractPlan(CUT);
+    log('plan: a block cut mid-JSON yields no plan and no raw JSON on screen', ep.plan === null && ep.broken && !/```|"type":"plan"/.test(ep.text) && /unreadable/.test(ep.text), ep.text);
+    log('plan: the prose before the cut block survives', /^Locking Pec Deck/.test(ep.text));
+    const oldM = CUT.match(/```json\s*([\s\S]*?)```/);   // RED CONTROL: the shipped extractPlan returned the text verbatim on no match
+    log('plan CONTROL: the shipped regex misses the cut block, so the old read showed the JSON', oldM === null && /"type":"plan"/.test(CUT));
+    const GOOD = 'Bump it.\n```json\n{"type":"plan","name":"P","days":[{"name":"A","exercises":[{"name":"Hammer Curl","sets":3,"reps":10}]}]}\n```\nDone.';
+    const eg = W().extractPlan(GOOD);
+    log('plan: a whole block still becomes a plan', eg.plan?.name === 'P' && !eg.broken && !/```/.test(eg.text), eg.text);
+    log('plan: a reply with no block is left alone', W().extractPlan('All good.').text === 'All good.' && !W().extractPlan('All good.').broken);
+    let cutThrew = null;
+    try { W().claudeReplyText({ stop_reason: 'max_tokens', content: [{ type: 'text', text: CUT }] }); } catch (e) { cutThrew = e.message; }
+    log('reply: text that hit max_tokens throws instead of passing as an answer', /cut off/.test(cutThrew || ''), cutThrew);
+    log('reply CONTROL: the same text at end_turn is returned', W().claudeReplyText({ stop_reason: 'end_turn', content: [{ type: 'text', text: CUT }] }) === CUT);
+    log('reply: the default budget is no longer 4000', W().callClaudeChat.toString().includes('maxTokens = 16000'));
+
+    // helper path: a stream that stops without {done} is cut (the helper always closes a finished answer)
+    const realFetch = W().fetch;
+    const sse = evs => new (W().Response)(new (W().ReadableStream)({ start(c) { const e = new (W().TextEncoder)(); for (const ev of evs) c.enqueue(e.encode('data: ' + JSON.stringify(ev) + '\n\n')); c.close(); } }));
+    try {
+      W().eval("losToken = 'harness'");
+      W().fetch = async () => sse([{ t: 'Locking ' }, { t: 'Pec Deck' }]);
+      let subThrew = null;
+      try { await W().callClaudeSub([{ role: 'user', content: 'x' }], 100); } catch (e) { subThrew = e.message; }
+      log('helper: a stream that ends without done throws', /ended before/.test(subThrew || ''), subThrew);
+      W().fetch = async () => sse([{ t: 'Locking ' }, { t: 'Pec Deck' }, { done: true }]);
+      const whole = await W().callClaudeSub([{ role: 'user', content: 'x' }], 100);
+      log('helper CONTROL: the same stream closed with done returns its text', whole === 'Locking Pec Deck', whole);
+    } finally { W().fetch = realFetch; W().eval('losToken = null'); }
+
+    // ── the proposal lives on the debrief: reopen shows the card, accept marks it, a second accept can't happen ──
+    const keep2 = W().eval('state').plan;
+    const DBP = { type: 'plan', name: 'DEBRIEF ADJ', days: [{ name: 'A', exercises: [{ name: 'Hammer Curl', sets: 3, reps: 10 }] }, { name: 'B', exercises: [{ name: 'Plank', sets: 3, seconds: 45 }] }] };
+    const dbs = { id: 'dbt', date: W().eval('today()'), startedAt: Date.now(), endedAt: Date.now(), entries: [],
+                  debrief: { ts: Date.now(), text: 'tired', reply: 'Old reply.\n\n```json\n{"type":"plan","na', plan: DBP } };
+    W().eval('state').sessions.push(dbs); W().save();
+    W().openDebrief('dbt'); await sleep(100);
+    const rb = D().getElementById('db-reply');
+    log('debrief: reopening shows the saved plan card', !!D().getElementById('db-accept') && !D().getElementById('db-accept').disabled && /DEBRIEF ADJ/i.test(rb.textContent));
+    log('debrief: a saved raw-JSON reply is cleaned on reopen', !/```|"type":"plan"/.test(rb.textContent) && /Old reply/.test(rb.textContent), rb.textContent.slice(0, 160));
+    D().getElementById('db-accept').click(); await sleep(100);
+    const after = state();
+    log('debrief: accept installs the plan', after.plan?.name === 'DEBRIEF ADJ', after.plan?.name);
+    log('debrief: accept is stamped on the debrief', !!after.sessions.find(x => x.id === 'dbt')?.debrief?.planAcceptedAt);
+    W().eval('state').plan.cursor = 1; W().save();
+    W().openDebrief('dbt'); await sleep(100);
+    const b2 = D().getElementById('db-accept');
+    log('debrief: an accepted proposal reopens disabled (re-accepting would reset the day cursor)', !!b2 && b2.disabled && /accepted/i.test(b2.textContent), b2 && b2.textContent);
+    b2.click(); await sleep(50);
+    log('debrief CONTROL: the click did not reset the cursor', W().eval('state').plan.cursor === 1);
+    W().eval('debriefModal').close();
+    W().eval('state').sessions = W().eval('state').sessions.filter(x => x.id !== 'dbt');
+    W().eval('state').plan = keep2; W().save();
+
     // ── mic: a recognizer failure must SAY so (it used to reset the button and leave the box blank) ──
     const realSR = W().SpeechRecognition, realWSR = W().webkitSpeechRecognition;
     const fakeSR = mode => class { start() { setTimeout(() => { if (mode !== 'silent') this.onerror?.({ error: mode }); this.onend?.(); }, 10); } stop() { this.onend?.(); } };
